@@ -4,7 +4,7 @@ Do these in order. Part 1 is enough to work locally. Parts 2 and 3 can wait unti
 
 ## Where each setting goes
 
-| Setting | `.env` | `studio/.env` | `studio/.env.production` | Netlify, all contexts | Netlify, `preview` branch only |
+| Setting | `web/.env` | `studio/.env` | `studio/.env.production` | Netlify, all contexts | Netlify, `preview` branch only |
 |---|---|---|---|---|---|
 | `SANITY_PROJECT_ID` | ✓ | | | ✓ | |
 | `SANITY_DATASET` | ✓ | | | ✓ | |
@@ -14,11 +14,11 @@ Do these in order. Part 1 is enough to work locally. Parts 2 and 3 can wait unti
 | `SANITY_STUDIO_DATASET` | | ✓ | | | |
 | `SANITY_STUDIO_PREVIEW_URL` | | ✓ local | ✓ deployed | | |
 
-- **`.env` and `studio/.env`:** used when you run things on your computer. They're already created and Git ignores them.
+- **`web/.env` and `studio/.env`:** used when you run things on your computer. They're already created and Git ignores them.
 - **`studio/.env.production`:** used when you deploy the Studio. It replaces the local preview address with the Netlify one,
   and it's committed because it holds no secrets.
-- **Netlify:** set in the Netlify UI, never in `netlify.toml`, because that file is committed.
-- **`SITE_MODE`:** already set for the `preview` branch in `netlify.toml`. Don't add it anywhere else.
+- **Netlify:** set in the Netlify UI, never in `web/netlify.toml`, because that file is committed.
+- **`SITE_MODE`:** already set for the `preview` branch in `web/netlify.toml`. Don't add it anywhere else.
 
 `SANITY_READ_TOKEN` can read unpublished drafts. Keep it out of the production context and out of any
 `SANITY_STUDIO_` or `PUBLIC_` variable, because those end up in browser code.
@@ -50,7 +50,7 @@ A public dataset only exposes published content. Drafts still need the token.
 
 | File | Variable | Value |
 |---|---|---|
-| `.env` | `SANITY_PROJECT_ID` | Your project ID |
+| `web/.env` | `SANITY_PROJECT_ID` | Your project ID |
 | `studio/.env` | `SANITY_STUDIO_PROJECT_ID` | Your project ID |
 
 Leave the other values as they are.
@@ -61,7 +61,7 @@ Run `npx sanity manage` from `studio/` to open the project settings, then:
 
 1. Go to **API → Tokens → Add API token**.
 2. Name it `Preview`, choose the **Viewer** role, and save.
-3. Copy the token into `SANITY_READ_TOKEN` in `.env`. Sanity only shows it once.
+3. Copy the token into `SANITY_READ_TOKEN` in `web/.env`. Sanity only shows it once.
 
 ### 4. Allow the local addresses
 
@@ -72,22 +72,20 @@ Under **API → CORS origins**, make sure these exist, each with **Allow credent
 
 ### 5. Run everything
 
-From the project root, in three terminals:
+From the project root, install both packages once:
 
 ```bash
-npm --prefix studio install
+npm run setup
 ```
+
+Then start the Studio and the preview together:
 
 ```bash
-npm run studio
+npm run dev:edit
 ```
 
-```bash
-npm run dev:preview
-```
-
-Open the Studio at http://localhost:3333, publish **Site settings** and a project, then open **Presentation**
-to check the preview. To see the public site with transitions, stop `dev:preview` and run `npm run dev`.
+Open the Studio at http://localhost:3333, publish **Site settings** and a project, add the project to
+**Home page** and publish that too, then open **Presentation** to check the preview. To see the public site with transitions, stop it and run `npm run dev:all`.
 
 ## Part 2: Deploy production to Netlify
 
@@ -95,13 +93,16 @@ to check the preview. To see the public site with transitions, stop `dev:preview
 
 1. Push the repo to GitHub, GitLab or Bitbucket.
 2. In Netlify, choose **Add new project → Import an existing project**, then pick the repo.
-3. Keep the build settings Netlify reads from `netlify.toml` (`npm run build`, publishing `dist`).
+3. Set **Base directory** to `web`. Netlify then reads `web/netlify.toml`, which sets the build command
+   (`npm run build`) and the publish folder (`dist`, inside `web/`).
 4. Before the first deploy, open **Project configuration → Environment variables** and add these for all contexts:
    - `SANITY_PROJECT_ID`
    - `SANITY_DATASET` = `production`
 5. Deploy. Note the site address, for example `https://your-site.netlify.app`.
 
-Every push to `main` deploys production and uses credits, so batch your commits.
+A push to `main` deploys production and uses credits, so batch your commits. Netlify skips the build
+when a push changes nothing in `web/`, so Studio-only changes are free. Builds from the
+"Put changes live" button always run.
 
 ### 2. Connect the "Put changes live" button
 

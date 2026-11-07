@@ -1,0 +1,19 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import Media from './Media.astro';
+
+const { popup } = Astro.props;
+// Changing the title or link shows the popup again to people who closed the old one.
+const key = stegaClean(`${popup.title}|${popup.link ?? ''}`);
+const Wrapper = popup.link ? 'a' : 'div';
+---
+
+<dialog class="popup" data-popup-key={key} aria-labelledby="popup-title">
+  <form method="dialog">
+    <button class="popup-close" aria-label="Close">×</button>
+  </form>
+  <Wrapper class="popup-body" href={popup.link}>
+    <Media media={popup.image} sizes="(min-width: 600px) 480px, 90vw" />
+    <h2 id="popup-title">{popup.title}</h2>
+  </Wrapper>
+</dialog>

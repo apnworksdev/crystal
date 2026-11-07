@@ -2,9 +2,18 @@ import { defineConfig } from 'sanity';
 import { defineLocations, presentationTool } from 'sanity/presentation';
 import { structureTool } from 'sanity/structure';
 import { deployTool } from './deployTool.jsx';
-import { schemaTypes } from './schemaTypes/index.js';
+import { schemaTypes, SINGLETONS } from './schemaTypes/index.js';
 
-const SINGLETONS = new Set(['siteSettings']);
+const iconFor = (type) => schemaTypes.find(({ name }) => name === type)?.icon;
+
+const singleton = (S, type, title) =>
+  S.listItem()
+    .title(title)
+    .id(type)
+    .icon(iconFor(type))
+    .child(S.document().schemaType(type).documentId(type).title(title));
+
+const page = (title, href) => ({ title, href });
 
 export default defineConfig({
   name: 'default',
@@ -17,12 +26,13 @@ export default defineConfig({
         S.list()
           .title('Content')
           .items([
-            S.listItem()
-              .title('Site settings')
-              .id('siteSettings')
-              .child(S.document().schemaType('siteSettings').documentId('siteSettings')),
-            S.divider(),
+            singleton(S, 'homePage', 'Home page'),
             S.documentTypeListItem('project').title('Projects'),
+            S.documentTypeListItem('award').title('Awards'),
+            S.documentTypeListItem('product').title('Merch'),
+            singleton(S, 'aboutPage', 'About page'),
+            S.divider(),
+            singleton(S, 'siteSettings', 'Site settings'),
           ]),
     }),
     presentationTool({
@@ -33,23 +43,28 @@ export default defineConfig({
       resolve: {
         locations: {
           project: defineLocations({
-            select: { title: 'title', slug: 'slug.current' },
+            select: {
+              title: 'title',
+              slug: 'slug.current',
+              showInWork: 'showInWork',
+              showInArchive: 'showInArchive',
+            },
             resolve: (doc) => ({
-              locations: doc?.slug
-                ? [
-                    { title: doc.title || 'Untitled', href: `/work/${doc.slug}` },
-                    { title: 'Home', href: '/' },
-                  ]
-                : [{ title: 'Home', href: '/' }],
+              locations: [
+                doc?.slug && page(doc.title || 'Project page', `/projects/${doc.slug}`),
+                doc?.showInWork && page('Work', '/work'),
+                doc?.showInArchive && page('Archive', '/archive'),
+              ].filter(Boolean),
             }),
           }),
+          award: defineLocations({ locations: [page('Awards', '/awards')] }),
+          product: defineLocations({ locations: [page('Merch', '/merch')] }),
+          homePage: defineLocations({ locations: [page('Home', '/')] }),
+          aboutPage: defineLocations({ locations: [page('About', '/about')] }),
           siteSettings: defineLocations({
-            message: 'Used across the whole site',
+            message: 'Used on every page',
             tone: 'positive',
-            locations: [
-              { title: 'Home', href: '/' },
-              { title: 'About', href: '/about' },
-            ],
+            locations: [page('Home', '/')],
           }),
         },
       },
@@ -58,12 +73,12 @@ export default defineConfig({
   tools: (tools) => [...tools, deployTool],
   schema: {
     types: schemaTypes,
-    // Keep site settings as a single document.
-    templates: (templates) => templates.filter(({ schemaType }) => !SINGLETONS.has(schemaType)),
+    // Pages with a single document can't be created again from the "new" menu.
+    templates: (templates) => templates.filter(({ schemaType }) => !SINGLETONS.includes(schemaType)),
   },
   document: {
     actions: (actions, { schemaType }) =>
-      SINGLETONS.has(schemaType)
+      SINGLETONS.includes(schemaType)
         ? actions.filter(({ action }) => action && ['publish', 'discardChanges', 'restore'].includes(action))
         : actions,
   },

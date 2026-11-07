@@ -2,6 +2,7 @@ import { RocketIcon } from '@sanity/icons/Rocket';
 import { Box, Button, Card, Container, Dialog, Flex, Heading, Stack, Text } from '@sanity/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useClient } from 'sanity';
+import { CONTENT_TYPES } from './schemaTypes/index.js';
 
 const DEPLOY_ID = 'deployRequest';
 
@@ -9,11 +10,11 @@ const DEPLOY_ID = 'deployRequest';
 const STATUS_QUERY = `{
   "lastDeploy": *[_id == $id][0].requestedAt,
   "waiting": count(*[
-    _type in ["project", "siteSettings"]
+    _type in $types
     && !(_id in path("drafts.**"))
     && _updatedAt > coalesce(*[_id == $id][0].requestedAt, "1970-01-01T00:00:00Z")
   ]),
-  "drafts": count(*[_type in ["project", "siteSettings"] && _id in path("drafts.**")])
+  "drafts": count(*[_type in $types && _id in path("drafts.**")])
 }`;
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -25,7 +26,7 @@ function DeployTool() {
   const [state, setState] = useState('idle');
 
   const refresh = useCallback(
-    () => client.fetch(STATUS_QUERY, { id: DEPLOY_ID }).then(setStatus),
+    () => client.fetch(STATUS_QUERY, { id: DEPLOY_ID, types: CONTENT_TYPES }).then(setStatus),
     [client],
   );
 

@@ -1,0 +1,31 @@
+---
+import Base from '../layouts/Base.astro';
+import { getArchiveProjects } from '../lib/content.js';
+import { formatCategories } from '../lib/format.js';
+
+const projects = await getArchiveProjects();
+---
+
+<Base title="Archive">
+  <h1 class="page-title">Archive</h1>
+  {
+    projects.length > 0 ? (
+      <ul class="archive">
+        {projects.map((project) => (
+          <li>
+            <a href={`/projects/${project.slug}`}>
+              <span class="archive-title" transition:name={`project-${project.slug}-title`}>
+                {project.title}
+              </span>
+              <span>{project.brand}</span>
+              <span>{formatCategories(project.categories)}</span>
+              <span class="archive-year">{project.year}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="empty">No projects yet.</p>
+    )
+  }
+</Base>

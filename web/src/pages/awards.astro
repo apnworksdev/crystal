@@ -1,0 +1,34 @@
+---
+import Media from '../components/Media.astro';
+import Base from '../layouts/Base.astro';
+import { getAwards } from '../lib/content.js';
+
+const awards = await getAwards();
+---
+
+<Base title="Awards">
+  <h1 class="visually-hidden">Awards</h1>
+  {
+    awards.length > 0 ? (
+      <ul class="awards">
+        {awards.map((award) => (
+          <li class="award">
+            <p class="award-text">
+              <span>{award.ceremony}</span>
+              <span>{award.category}</span>
+              {award.work && <span>{award.work}</span>}
+            </p>
+            {award.image && (
+              <div class="award-image">
+                <Media media={award.image} sizes="320px" />
+              </div>
+            )}
+            <span class="award-year">{award.year}</span>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="empty">No awards yet.</p>
+    )
+  }
+</Base>

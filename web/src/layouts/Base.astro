@@ -1,6 +1,7 @@
 ---
 import { stegaClean } from '@sanity/client/stega';
 import { ClientRouter, fade } from 'astro:transitions';
+import Popup from '../components/Popup.astro';
 import { getSettings, isPreview } from '../lib/content.js';
 import '../styles/global.css';
 
@@ -9,8 +10,15 @@ const settings = await getSettings();
 const siteTitle = stegaClean(settings.title);
 const pageTitle = title ? `${stegaClean(title)} · ${siteTitle}` : siteTitle;
 const path = Astro.url.pathname;
-const isWork = path === '/' || path.startsWith('/work');
-const isAbout = path.startsWith('/about');
+
+const NAV = [
+  ['Work', '/work'],
+  ['Awards', '/awards'],
+  ['Archive', '/archive'],
+  ['Merch', '/merch'],
+  ['About', '/about'],
+];
+const isCurrent = (href) => path === href || path.startsWith(`${href}/`);
 ---
 
 <!doctype html>
@@ -30,8 +38,9 @@ const isAbout = path.startsWith('/about');
     <header class="site-header" transition:name="site-header" transition:animate="none">
       <a class="wordmark" href="/">{settings.title}</a>
       <nav aria-label="Main">
-        <a href="/" aria-current={isWork ? 'page' : undefined}>Work</a>
-        <a href="/about" aria-current={isAbout ? 'page' : undefined}>About</a>
+        {NAV.map(([label, href]) => (
+          <a href={href} aria-current={isCurrent(href) ? 'page' : undefined}>{label}</a>
+        ))}
       </nav>
     </header>
 
@@ -40,8 +49,14 @@ const isAbout = path.startsWith('/about');
     </main>
 
     <footer class="site-footer" transition:name="site-footer" transition:animate="none">
-      {settings.email && <a href={`mailto:${settings.email}`}>{settings.email}</a>}
+      {settings.email && <a href={`mailto:${stegaClean(settings.email)}`}>{settings.email}</a>}
       {settings.links?.map((link) => <a href={link.url} rel="me noopener">{link.label}</a>)}
     </footer>
+
+    {settings.popup && <Popup popup={settings.popup} />}
+
+    <script>
+      import '../scripts/page.js';
+    </script>
   </body>
 </html>

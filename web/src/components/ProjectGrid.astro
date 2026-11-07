@@ -1,0 +1,31 @@
+---
+import Media from './Media.astro';
+
+const { projects, emptyText = 'No projects yet.' } = Astro.props;
+---
+
+{
+  projects.length > 0 ? (
+    <ul class="project-grid">
+      {projects.map((project, index) => (
+        <li>
+          <a class="project-card" href={`/projects/${project.slug}`}>
+            <div class="project-media" transition:name={`project-${project.slug}-media`}>
+              <Media
+                media={project.thumbnail}
+                sizes="(min-width: 800px) 50vw, 100vw"
+                priority={index < 2}
+              />
+            </div>
+            <div class="project-card-text">
+              <h2 transition:name={`project-${project.slug}-title`}>{project.title}</h2>
+              <span>{[project.brand, project.year].filter(Boolean).join(' · ')}</span>
+            </div>
+          </a>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p class="empty">{emptyText}</p>
+  )
+}

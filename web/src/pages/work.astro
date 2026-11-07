@@ -1,0 +1,12 @@
+---
+import ProjectGrid from '../components/ProjectGrid.astro';
+import Base from '../layouts/Base.astro';
+import { getWorkProjects } from '../lib/content.js';
+
+const projects = await getWorkProjects();
+---
+
+<Base title="Work">
+  <h1 class="page-title">Work</h1>
+  <ProjectGrid projects={projects} />
+</Base>

@@ -1,17 +1,24 @@
-import { defineArrayMember, defineField, defineType } from 'sanity';
+import { DocumentVideoIcon } from '@sanity/icons/DocumentVideo';
+import { defineField, defineType } from 'sanity';
 
-const altField = defineField({
-  name: 'alt',
-  title: 'Alt text',
-  type: 'string',
-  description: 'Describes the image for screen readers.',
-  validation: (rule) => rule.required(),
-});
+export const PROJECT_CATEGORIES = [
+  { title: 'Trailer', value: 'trailer' },
+  { title: 'Sound design', value: 'sound-design' },
+  { title: 'Music', value: 'music' },
+  { title: 'Mix', value: 'mix' },
+  { title: 'Games', value: 'games' },
+  { title: 'Advertisement', value: 'advertisement' },
+];
 
 export const project = defineType({
   name: 'project',
   title: 'Project',
   type: 'document',
+  icon: DocumentVideoIcon,
+  fieldsets: [
+    { name: 'pages', title: 'Show on', options: { columns: 2 } },
+    { name: 'credits', title: 'Credits', options: { columns: 2 } },
+  ],
   fields: [
     defineField({
       name: 'title',
@@ -20,62 +27,86 @@ export const project = defineType({
     }),
     defineField({
       name: 'slug',
+      title: 'URL',
       type: 'slug',
+      description: 'The project page address. Generate it from the title.',
       options: { source: 'title', maxLength: 96 },
       validation: (rule) => rule.required(),
     }),
     defineField({
+      name: 'showInWork',
+      title: 'Work page',
+      type: 'boolean',
+      fieldset: 'pages',
+      initialValue: false,
+    }),
+    defineField({
+      name: 'showInArchive',
+      title: 'Archive page',
+      type: 'boolean',
+      fieldset: 'pages',
+      initialValue: false,
+    }),
+    defineField({
+      name: 'brand',
+      type: 'string',
+    }),
+    defineField({
       name: 'year',
       type: 'number',
-      validation: (rule) => rule.required().integer().min(1900),
+      validation: (rule) => rule.required().integer().min(1900).max(2100),
     }),
     defineField({
-      name: 'role',
-      type: 'string',
-      description: 'For example: Art direction, Web design.',
+      name: 'categories',
+      type: 'array',
+      of: [{ type: 'string' }],
+      options: { list: PROJECT_CATEGORIES, layout: 'grid' },
     }),
     defineField({
-      name: 'summary',
-      type: 'text',
-      rows: 2,
-      description: 'One or two sentences shown at the top of the project page.',
-      validation: (rule) => rule.required().max(240),
-    }),
-    defineField({
-      name: 'cover',
-      title: 'Cover image',
-      type: 'image',
-      options: { hotspot: true },
-      fields: [altField],
+      name: 'mainMedia',
+      title: 'Main media',
+      type: 'media',
+      description: 'Shown at the top of the project page.',
       validation: (rule) => rule.required(),
     }),
     defineField({
-      name: 'description',
-      type: 'text',
-      rows: 8,
-      description: 'Leave a blank line between paragraphs.',
+      name: 'thumbnail',
+      type: 'media',
+      description: 'Shown in lists of projects. Videos play muted on a loop. Leave empty to use the main media.',
     }),
     defineField({
-      name: 'gallery',
-      type: 'array',
-      of: [
-        defineArrayMember({
-          type: 'image',
-          options: { hotspot: true },
-          fields: [altField],
-        }),
-      ],
+      name: 'description',
+      type: 'richText',
     }),
+    defineField({ name: 'director', type: 'string', fieldset: 'credits' }),
+    defineField({ name: 'starring', type: 'string', fieldset: 'credits' }),
+    defineField({ name: 'screenplay', type: 'string', fieldset: 'credits' }),
+    defineField({ name: 'edited', title: 'Edited by', type: 'string', fieldset: 'credits' }),
   ],
   orderings: [
     {
       title: 'Year, newest first',
       name: 'yearDesc',
-      by: [{ field: 'year', direction: 'desc' }],
+      by: [
+        { field: 'year', direction: 'desc' },
+        { field: 'title', direction: 'asc' },
+      ],
     },
   ],
   preview: {
-    select: { title: 'title', subtitle: 'year', media: 'cover' },
-    prepare: ({ title, subtitle, media }) => ({ title, subtitle: subtitle && String(subtitle), media }),
+    select: {
+      title: 'title',
+      brand: 'brand',
+      year: 'year',
+      thumbImage: 'thumbnail.image',
+      thumbPoster: 'thumbnail.poster',
+      mainImage: 'mainMedia.image',
+      mainPoster: 'mainMedia.poster',
+    },
+    prepare: ({ title, brand, year, thumbImage, thumbPoster, mainImage, mainPoster }) => ({
+      title,
+      subtitle: [brand, year].filter(Boolean).join(' · '),
+      media: thumbImage || thumbPoster || mainImage || mainPoster,
+    }),
   },
 });

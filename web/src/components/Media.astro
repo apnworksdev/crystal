@@ -1,0 +1,69 @@
+---
+/**
+ * Shows an image or a video.
+ * - loop: muted and looping, plays only while on screen (thumbnails)
+ * - player: plays with sound and controls (main media)
+ */
+const { media, sizes = '100vw', priority = false, mode = 'loop' } = Astro.props;
+const image = media?.kind === 'image' ? media : media?.poster;
+const isVimeo = media?.kind === 'video' && media.source === 'vimeo';
+const isFile = media?.kind === 'video' && media.source === 'file';
+---
+
+{
+  image && (mode === 'player' || !isFile) && (
+    <img
+      class:list={{ 'media-under': media.kind === 'video' }}
+      src={image.src}
+      srcset={image.srcset}
+      sizes={image.srcset ? sizes : undefined}
+      width={image.width}
+      height={image.height}
+      alt={media.kind === 'video' ? '' : image.alt}
+      loading={priority ? 'eager' : 'lazy'}
+      fetchpriority={priority ? 'high' : undefined}
+      decoding="async"
+      style={image.lqip ? `background: url(${image.lqip}) center / cover` : undefined}
+    />
+  )
+}
+
+{
+  isVimeo && mode === 'player' && (
+    <button class="video-play" type="button" data-vimeo-player={media.playerSrc}>
+      Play video
+    </button>
+  )
+}
+
+{
+  isVimeo && mode === 'loop' && (
+    <iframe
+      class="video-loop"
+      src={media.loopSrc}
+      loading="lazy"
+      allow="autoplay"
+      tabindex="-1"
+      aria-hidden="true"
+      title=""
+    />
+  )
+}
+
+{
+  isFile &&
+    (mode === 'player' ? (
+      <video src={media.src} poster={image?.src} controls playsinline preload="metadata" />
+    ) : (
+      <video
+        src={media.src}
+        poster={image?.src}
+        data-autoplay
+        muted
+        loop
+        playsinline
+        preload="none"
+        aria-hidden="true"
+      />
+    ))
+}

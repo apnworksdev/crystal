@@ -1,0 +1,59 @@
+---
+import Media from '../../components/Media.astro';
+import Base from '../../layouts/Base.astro';
+import { getProjects } from '../../lib/content.js';
+import { formatCategories, richTextToHtml } from '../../lib/format.js';
+
+export async function getStaticPaths() {
+  const projects = await getProjects();
+  return projects.map(({ slug }) => ({ params: { slug } }));
+}
+
+// Looked up by slug because preview mode renders on the server, without getStaticPaths.
+const project = (await getProjects()).find(({ slug }) => slug === Astro.params.slug);
+if (!project) return Astro.rewrite('/404');
+
+const credits = [
+  ['Director', project.director],
+  ['Starring', project.starring],
+  ['Screenplay', project.screenplay],
+  ['Edited by', project.edited],
+].filter(([, value]) => value);
+const meta = [project.brand, project.year, formatCategories(project.categories)].filter(Boolean);
+const description = richTextToHtml(project.description);
+---
+
+<Base title={project.title}>
+  <article class="project">
+    <header class="project-header">
+      <h1 transition:name={`project-${project.slug}-title`}>{project.title}</h1>
+      {meta.length > 0 && <p class="project-meta">{meta.join(' · ')}</p>}
+    </header>
+
+    <div
+      class="project-media project-main"
+      data-kind={project.mainMedia?.kind}
+      transition:name={`project-${project.slug}-media`}
+    >
+      <Media media={project.mainMedia} mode="player" priority />
+    </div>
+
+    {
+      (description || credits.length > 0) && (
+        <div class="project-body">
+          {description && <div class="rich-text" set:html={description} />}
+          {credits.length > 0 && (
+            <dl class="credits">
+              {credits.map(([label, value]) => (
+                <div>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      )
+    }
+  </article>
+</Base>

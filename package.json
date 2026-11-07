@@ -1,23 +1,15 @@
 {
-  "name": "crystal-web",
-  "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "studio": "npm --prefix studio run dev",
-    "dev:preview": "SITE_MODE=preview astro dev"
-  },
-  "type": "module",
+  "name": "crystal",
   "private": true,
-  "dependencies": {
-    "@astrojs/netlify": "^8.2.11",
-    "@sanity/client": "^8.14.1",
-    "@sanity/image-url": "^2.1.1",
-    "@sanity/preview-url-secret": "^4.1.5",
-    "@sanity/visual-editing": "^6.2.0",
-    "astro": "^7.4.5",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "styled-components": "^6.6.0"
+  "scripts": {
+    "setup": "npm install && npm --prefix web install && npm --prefix studio install",
+    "dev": "npm --prefix web run dev",
+    "dev:preview": "npm --prefix web run dev:preview",
+    "studio": "npm --prefix studio run dev",
+    "dev:all": "concurrently --kill-others --names site,studio --prefix-colors blue,magenta \"npm:dev\" \"npm:studio\"",
+    "dev:edit": "concurrently --kill-others --names preview,studio --prefix-colors green,magenta \"npm:dev:preview\" \"npm:studio\""
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
   }
 }

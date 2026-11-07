@@ -1,0 +1,37 @@
+---
+import Media from '../components/Media.astro';
+import Base from '../layouts/Base.astro';
+import { getAbout } from '../lib/content.js';
+import { richTextToHtml } from '../lib/format.js';
+
+const { content, team } = await getAbout();
+const html = richTextToHtml(content);
+---
+
+<Base title="About">
+  <h1 class="page-title">About</h1>
+  {html && <div class="rich-text about-text" set:html={html} />}
+
+  {
+    team.length > 0 && (
+      <section aria-labelledby="team-title">
+        <h2 id="team-title" class="section-title">Team</h2>
+        <ul class="team">
+          {team.map((member) => (
+            <li class="team-member">
+              {member.image && <Media media={member.image} sizes="(min-width: 800px) 25vw, 50vw" />}
+              <h3>{member.name}</h3>
+              {member.position && <p class="team-position">{member.position}</p>}
+              {member.description && <p>{member.description}</p>}
+              {member.favouriteTrack && (
+                <p class="team-track">
+                  <span>Favourite track</span> {member.favouriteTrack}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+</Base>

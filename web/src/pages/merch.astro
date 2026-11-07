@@ -1,0 +1,39 @@
+---
+import Media from '../components/Media.astro';
+import Base from '../layouts/Base.astro';
+import { getProducts } from '../lib/content.js';
+
+const products = await getProducts();
+---
+
+<Base title="Merch">
+  <h1 class="page-title">Merch</h1>
+  {
+    products.length > 0 ? (
+      <ul class="products">
+        {products.map((product, index) => (
+          <li class="product">
+            <div class="product-images" tabindex={product.images.length > 1 ? 0 : undefined}>
+              {product.images.map((image, imageIndex) => (
+                <Media
+                  media={image}
+                  sizes="(min-width: 800px) 33vw, 100vw"
+                  priority={index < 3 && imageIndex === 0}
+                />
+              ))}
+            </div>
+            <div class="product-text">
+              <h2>{product.title}</h2>
+              <span>{product.price}</span>
+            </div>
+            <a class="product-buy" href={product.url} target="_blank" rel="noopener">
+              Buy<span class="visually-hidden"> {product.title} (opens in a new tab)</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="empty">No products yet.</p>
+    )
+  }
+</Base>
