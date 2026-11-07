@@ -1,0 +1,47 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import { ClientRouter, fade } from 'astro:transitions';
+import { getSettings, isPreview } from '../lib/content.js';
+import '../styles/global.css';
+
+const { title, description } = Astro.props;
+const settings = await getSettings();
+const siteTitle = stegaClean(settings.title);
+const pageTitle = title ? `${stegaClean(title)} · ${siteTitle}` : siteTitle;
+const path = Astro.url.pathname;
+const isWork = path === '/' || path.startsWith('/work');
+const isAbout = path.startsWith('/about');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={stegaClean(description ?? settings.description)} />
+    {isPreview && <meta name="robots" content="noindex" />}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {!settings.isPlaceholder && <link rel="preconnect" href="https://cdn.sanity.io" />}
+    {/* Click-to-edit needs a stable page, so preview uses normal page loads. */}
+    {!isPreview && <ClientRouter />}
+  </head>
+  <body>
+    <header class="site-header" transition:name="site-header" transition:animate="none">
+      <a class="wordmark" href="/">{settings.title}</a>
+      <nav aria-label="Main">
+        <a href="/" aria-current={isWork ? 'page' : undefined}>Work</a>
+        <a href="/about" aria-current={isAbout ? 'page' : undefined}>About</a>
+      </nav>
+    </header>
+
+    <main transition:animate={fade({ duration: '0.25s' })}>
+      <slot />
+    </main>
+
+    <footer class="site-footer" transition:name="site-footer" transition:animate="none">
+      {settings.email && <a href={`mailto:${settings.email}`}>{settings.email}</a>}
+      {settings.links?.map((link) => <a href={link.url} rel="me noopener">{link.label}</a>)}
+    </footer>
+  </body>
+</html>

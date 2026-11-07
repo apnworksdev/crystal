@@ -1,0 +1,37 @@
+---
+import Media from '../components/Media.astro';
+import Base from '../layouts/Base.astro';
+import { getProjects, getSettings } from '../lib/content.js';
+
+const [projects, settings] = await Promise.all([getProjects(), getSettings()]);
+---
+
+<Base>
+  {settings.tagline && <h1 class="statement">{settings.tagline}</h1>}
+
+  {
+    projects.length > 0 ? (
+      <ul class="project-grid">
+        {projects.map((project, index) => (
+          <li>
+            <a class="project-card" href={`/work/${project.slug}`}>
+              <div class="project-media" transition:name={`project-${project.slug}-media`}>
+                <Media
+                  image={project.card}
+                  sizes="(min-width: 800px) 50vw, 100vw"
+                  priority={index < 2}
+                />
+              </div>
+              <div class="project-card-text">
+                <h2 transition:name={`project-${project.slug}-title`}>{project.title}</h2>
+                <span>{project.year}</span>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="empty">No projects published yet.</p>
+    )
+  }
+</Base>

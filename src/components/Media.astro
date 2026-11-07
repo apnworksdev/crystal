@@ -1,0 +1,21 @@
+---
+const { image, sizes = '100vw', priority = false } = Astro.props;
+---
+
+{
+  /* A draft project may not have an image yet. */
+  image && (
+    <img
+      src={image.src}
+      srcset={image.srcset}
+      sizes={image.srcset ? sizes : undefined}
+      width={image.width}
+      height={image.height}
+      alt={image.alt}
+      loading={priority ? 'eager' : 'lazy'}
+      fetchpriority={priority ? 'high' : undefined}
+      decoding="async"
+      style={image.lqip ? `background: url(${image.lqip}) center / cover` : undefined}
+    />
+  )
+}

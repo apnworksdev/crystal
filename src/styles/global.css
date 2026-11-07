@@ -1,0 +1,256 @@
+:root {
+  --paper: #f3f1ea;
+  --ink: #15140f;
+  --muted: #6f6c61;
+  --line: #d9d5c8;
+  --gutter: clamp(1.25rem, 3vw, 2.5rem);
+  --display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --text: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem/1.55 var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  flex: 1;
+  padding-inline: var(--gutter);
+}
+
+h1,
+h2,
+p,
+dl,
+dd,
+ul {
+  margin: 0;
+  padding: 0;
+}
+
+ul {
+  list-style: none;
+}
+
+img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+/* Header and footer */
+
+.site-header,
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding: 1.25rem var(--gutter);
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-size: 1.25rem;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.site-header nav a {
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.site-header nav a:hover,
+.site-header nav a[aria-current] {
+  color: var(--ink);
+}
+
+.site-footer {
+  justify-content: flex-start;
+  margin-top: clamp(4rem, 10vw, 8rem);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.site-footer a:hover {
+  color: var(--ink);
+}
+
+/* Home */
+
+.statement {
+  max-width: 20ch;
+  padding-block: clamp(3rem, 9vw, 7.5rem);
+  font: 400 clamp(2.5rem, 7vw, 6rem) / 1.03 var(--display);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.project-grid {
+  display: grid;
+  gap: clamp(2.5rem, 5vw, 4rem) var(--gutter);
+}
+
+@media (min-width: 800px) {
+  .project-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .project-grid li:nth-child(even) {
+    margin-top: clamp(4rem, 9vw, 8rem);
+  }
+}
+
+.project-media {
+  overflow: hidden;
+  background: var(--line);
+  view-transition-class: project-media;
+}
+
+.project-card .project-media {
+  aspect-ratio: 4 / 3;
+}
+
+.project-card img {
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.7s var(--ease);
+}
+
+.project-card:hover img {
+  transform: scale(1.025);
+}
+
+.project-card-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.project-card-text h2 {
+  width: fit-content;
+  font: 400 1.5rem/1.2 var(--display);
+}
+
+.project-card-text span,
+.empty {
+  color: var(--muted);
+}
+
+/* Project */
+
+.project-header {
+  display: grid;
+  gap: 1.5rem;
+  padding-block: clamp(2.5rem, 7vw, 6rem);
+}
+
+.project-header h1 {
+  width: fit-content;
+  font: 400 clamp(3rem, 10vw, 8.5rem) / 1 var(--display);
+  letter-spacing: -0.025em;
+}
+
+.project-summary {
+  max-width: 38ch;
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+
+.project-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+}
+
+.project-meta dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.prose {
+  display: grid;
+  gap: 1em;
+  max-width: 60ch;
+  font-size: 1.125rem;
+}
+
+.project .prose {
+  margin-block: clamp(3rem, 8vw, 6rem);
+}
+
+.gallery {
+  display: grid;
+  gap: var(--gutter);
+}
+
+.next-project {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: clamp(4rem, 10vw, 8rem);
+}
+
+.next-project span {
+  color: var(--muted);
+}
+
+.next-project strong {
+  font: 400 clamp(2.5rem, 8vw, 6rem) / 1.05 var(--display);
+  letter-spacing: -0.02em;
+  transition: transform 0.5s var(--ease);
+}
+
+.next-project:hover strong {
+  transform: translateX(0.15em);
+}
+
+/* Page transitions */
+
+::view-transition-group(*.project-media) {
+  animation-duration: 0.6s;
+  animation-timing-function: var(--ease);
+}
+
+::view-transition-old(*.project-media),
+::view-transition-new(*.project-media) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation-duration: 0.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
