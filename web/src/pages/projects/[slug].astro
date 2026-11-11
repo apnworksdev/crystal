@@ -13,25 +13,22 @@ export async function getStaticPaths() {
 const project = (await getProjects()).find(({ slug }) => slug === Astro.params.slug);
 if (!project) return Astro.rewrite('/404');
 
-const credits = [
-  ['Director', project.director],
-  ['Starring', project.starring],
-  ['Screenplay', project.screenplay],
-  ['Edited by', project.edited],
-].filter(([, value]) => value);
 const meta = [project.brand, project.year, formatCategories(project.categories)].filter(Boolean);
 const description = richTextToHtml(project.description);
+const credits = richTextToHtml(project.credits);
 ---
 
 <Base title={project.title}>
   <article class="project">
-    <header class="project-header">
-      <h1 transition:name={`project-${project.slug}-title`}>{project.title}</h1>
-      {meta.length > 0 && <p class="project-meta">{meta.join(' · ')}</p>}
+    <header class="project__header">
+      <h1 class="project__title" transition:name={`project-${project.slug}-title`}>
+        {project.title}
+      </h1>
+      {meta.length > 0 && <p class="project__meta">{meta.join(' · ')}</p>}
     </header>
 
     <div
-      class="project-media project-main"
+      class="project__media"
       data-kind={project.mainMedia?.kind}
       transition:name={`project-${project.slug}-media`}
     >
@@ -39,19 +36,10 @@ const description = richTextToHtml(project.description);
     </div>
 
     {
-      (description || credits.length > 0) && (
-        <div class="project-body">
-          {description && <div class="rich-text" set:html={description} />}
-          {credits.length > 0 && (
-            <dl class="credits">
-              {credits.map(([label, value]) => (
-                <div>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
+      (description || credits) && (
+        <div class="project__body">
+          {description && <div class="project__description rich-text" set:html={description} />}
+          {credits && <div class="project__credits rich-text" set:html={credits} />}
         </div>
       )
     }

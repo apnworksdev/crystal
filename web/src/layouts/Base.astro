@@ -1,9 +1,15 @@
 ---
 import { stegaClean } from '@sanity/client/stega';
 import { ClientRouter, fade } from 'astro:transitions';
+import Logo from '../components/icons/Logo.astro';
 import Popup from '../components/Popup.astro';
 import { getSettings, isPreview } from '../lib/content.js';
-import '../styles/global.css';
+import '../styles/common/variables.css';
+import '../styles/common/fonts.css';
+import '../styles/common/globals.css';
+import '../styles/common/main.css';
+import '../styles/common/transitions.css';
+import '../styles/components/header.css';
 
 const { title, description } = Astro.props;
 const settings = await getSettings();
@@ -19,6 +25,8 @@ const NAV = [
   ['About', '/about'],
 ];
 const isCurrent = (href) => path === href || path.startsWith(`${href}/`);
+const onWork = path === '/work' || path === '/work/';
+const currentNav = NAV.find(([, href]) => isCurrent(href));
 ---
 
 <!doctype html>
@@ -35,13 +43,47 @@ const isCurrent = (href) => path === href || path.startsWith(`${href}/`);
     {!isPreview && <ClientRouter />}
   </head>
   <body>
-    <header class="site-header" transition:name="site-header" transition:animate="none">
-      <a class="wordmark" href="/">{settings.title}</a>
-      <nav aria-label="Main">
-        {NAV.map(([label, href]) => (
-          <a href={href} aria-current={isCurrent(href) ? 'page' : undefined}>{label}</a>
-        ))}
+    <header class="site-header" transition:persist="site-header" transition:animate="none">
+      <a class="site-header__logo" href="/">
+        <Logo />
+        <span class="sr-only">{settings.title}</span>
+      </a>
+      <div class="site-header__context">
+        {
+          currentNav && (
+            <a class="site-header__link" href={currentNav[1]} aria-current="page">
+              {currentNav[0]}
+            </a>
+          )
+        }
+        <a class="site-header__project" data-header-project hidden></a>
+        <div class="site-header__views" data-work-views hidden={!onWork}>
+          <button class="site-header__view" type="button" data-view="list" aria-pressed="false">
+            List
+          </button>
+          <button class="site-header__view" type="button" data-view="reel" aria-pressed="true">
+            Reel
+          </button>
+        </div>
+      </div>
+      <nav class="site-header__nav" id="site-nav" aria-label="Main">
+        <div class="site-header__links">
+          {NAV.filter(([, href]) => !isCurrent(href)).map(([label, href]) => (
+            <a class="site-header__link" href={href}>
+              {label}
+            </a>
+          ))}
+        </div>
       </nav>
+      <button
+        class="site-header__toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="site-nav"
+        aria-label="Open menu"
+      >
+        <span aria-hidden="true" data-header-mark>+</span>
+      </button>
     </header>
 
     <main transition:animate={fade({ duration: '0.25s' })}>
@@ -49,8 +91,16 @@ const isCurrent = (href) => path === href || path.startsWith(`${href}/`);
     </main>
 
     <footer class="site-footer" transition:name="site-footer" transition:animate="none">
-      {settings.email && <a href={`mailto:${stegaClean(settings.email)}`}>{settings.email}</a>}
-      {settings.links?.map((link) => <a href={link.url} rel="me noopener">{link.label}</a>)}
+      {settings.email && (
+        <a class="site-footer__link" href={`mailto:${stegaClean(settings.email)}`}>
+          {settings.email}
+        </a>
+      )}
+      {settings.links?.map((link) => (
+        <a class="site-footer__link" href={link.url} rel="me noopener">
+          {link.label}
+        </a>
+      ))}
     </footer>
 
     {settings.popup && <Popup popup={settings.popup} />}

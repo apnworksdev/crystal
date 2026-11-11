@@ -1,0 +1,81 @@
+/* Home roulette: a plain row. One pixel between slides, nothing stacked. */
+
+.project-roulette {
+  position: relative;
+  height: 100dvh;
+  min-height: 24rem;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.project-roulette__viewport {
+  width: 100%;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.project-roulette__viewport:active {
+  cursor: grabbing;
+}
+
+.project-roulette__track {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  touch-action: none;
+}
+
+.project-roulette__slide {
+  flex: 0 0 46%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-roulette__card {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  transform: translateX(var(--roulette-shift, 0px)) scale(var(--roulette-scale, 1));
+  transform-origin: center center;
+}
+
+.project-roulette__media {
+  --roulette-max-width: 46vw;
+  --roulette-max-height: 64vh;
+}
+
+/* The ratio is known before the file arrives, so the slot is already the
+   right size and the row does not open a hole while the picture loads. */
+.project-roulette__media :is(img, video, iframe) {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: var(--roulette-max-width);
+  max-height: var(--roulette-max-height);
+  aspect-ratio: var(--roulette-ratio, auto);
+  pointer-events: none;
+}
+
+.project-roulette__media[data-ratio] :is(img, video, iframe) {
+  width: min(var(--roulette-max-width), calc(var(--roulette-max-height) * var(--roulette-ratio)));
+}
+
+@media (max-width: 40rem) {
+  .project-roulette__slide {
+    flex-basis: 78%;
+  }
+
+  .project-roulette__media {
+    --roulette-max-width: 78vw;
+    --roulette-max-height: 56vh;
+  }
+}
+
+body:has([data-roulette]) .site-footer {
+  display: none;
+}

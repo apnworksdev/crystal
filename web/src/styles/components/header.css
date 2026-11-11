@@ -1,0 +1,318 @@
+/* Closed: wordmark and +. Open: wordmark and the section links. */
+@property --bubble {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.site-header {
+  --transition-duration: 0.18s;
+  position: fixed;
+  z-index: 2;
+  top: 50%;
+  left: var(--margin);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: stretch;
+  height: var(--height-bubble);
+}
+
+.site-header__logo,
+.site-header__project,
+.site-header__link,
+.site-header__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--height-bubble);
+  background: var(--foreground-color);
+  color: var(--background-color);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.site-header__logo,
+.site-header__project,
+.site-header__link {
+  padding-inline: var(--inline-gap);
+}
+
+.site-header__logo {
+  text-transform: lowercase;
+}
+
+.site-header__context {
+  position: relative;
+  display: flex;
+  flex: none;
+  width: max-content;
+  margin-left: var(--small-gap);
+}
+
+.site-header__context:not(:has(.site-header__project:not([hidden]))):not(:has(.site-header__link)) {
+  display: none;
+}
+
+/* The current section is the nav link itself, parked beside the logo. */
+.site-header__context .site-header__link {
+  --bubble: 1;
+  width: max-content;
+  padding-inline: var(--inline-gap);
+  color: var(--background-color);
+}
+
+.site-header__project {
+  flex: none;
+  max-width: min(40vw, 16rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    width var(--transition-duration) linear,
+    color var(--transition-duration) linear;
+}
+
+.site-header__project[hidden] {
+  display: none;
+}
+
+/* Work page. List sits under the Work link, with Reel beside it. */
+.site-header__views {
+  position: absolute;
+  width: 100%;
+  top: calc(100% + var(--small-gap));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--small-gap);
+  z-index: 1;
+}
+
+.site-header__views[hidden] {
+  display: none;
+}
+
+.site-header__view {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--height-bubble);
+  padding-inline: var(--inline-gap);
+  background: transparent;
+  color: var(--foreground-color);
+  font: inherit;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.site-header__view[aria-pressed='true'] {
+  background: var(--foreground-color);
+  color: var(--background-color);
+}
+
+.site-header__view[aria-pressed='false']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 200%;
+  /* border: 1px solid var(--foreground-color); */
+  box-shadow: inset 0 0 0 1px var(--foreground-color);
+  transform-origin: top left;
+  transform: scale(0.5);
+}
+
+/* List mode: the menu stacks under Work and + stays put, as a minus.
+   The menu paints over List and Reel and wipes down across them. */
+body[data-work-view='list'] .site-header.is-settled[data-open] .site-header__views {
+  visibility: hidden;
+}
+
+body[data-work-view='list'] .site-header[data-open] .site-header__toggle {
+  width: var(--height-bubble);
+  margin-left: var(--small-gap);
+  overflow: visible;
+  display: flex;
+}
+
+body[data-work-view='list'] .site-header[data-open] .site-header__nav {
+  --bubble: 0;
+  position: absolute;
+  top: calc(100% + var(--small-gap));
+  left: var(--list-nav-left, 0px);
+  width: max-content;
+  height: calc(var(--list-nav-full, 0px) * var(--bubble));
+  margin-left: 0;
+  overflow: hidden;
+  z-index: 1;
+  transition: --bubble var(--transition-duration) linear;
+}
+
+body[data-work-view='list'] .site-header[data-open]:not([data-closing]) .site-header__nav {
+  --bubble: 1;
+}
+
+body[data-work-view='list'] .site-header.is-settled[data-open] .site-header__nav {
+  overflow: visible;
+}
+
+body[data-work-view='list'] .site-header[data-open] .site-header__links {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Full width immediately, labels included. The stack itself grows downward. */
+body[data-work-view='list'] .site-header__links .site-header__link {
+  width: max-content;
+  padding-inline: var(--gap);
+}
+
+body[data-work-view='list'] .site-header[data-open] .site-header__links .site-header__link {
+  color: var(--background-color);
+}
+
+body[data-work-view='list'] .site-header__links .site-header__link[aria-current='page'] {
+  display: none;
+}
+
+@media (max-width: 30rem) {
+  body[data-work-view='list'] .site-header[data-open] {
+    flex-direction: row;
+    align-items: stretch;
+    height: var(--height-bubble);
+    gap: 0;
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__nav {
+    width: max-content;
+    max-width: none;
+    margin-left: 0;
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__links {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    width: max-content;
+    max-width: none;
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__toggle {
+    display: flex;
+  }
+}
+
+.site-header__nav {
+  width: 0;
+  margin-left: 0;
+  overflow: hidden;
+}
+
+.site-header__links {
+  display: flex;
+  align-items: stretch;
+  gap: var(--small-gap);
+  width: max-content;
+}
+
+.site-header.is-settled .site-header__nav {
+  overflow: visible;
+}
+
+.site-header__link {
+  --bubble: 0;
+  flex: none;
+  min-width: 0;
+  padding-inline: 0;
+  width: calc(var(--full, 0px) * var(--bubble));
+  overflow: hidden;
+  color: transparent;
+  transition: --bubble var(--transition-duration) linear;
+}
+
+.site-header[data-open]:not([data-closing]) .site-header__link {
+  --bubble: 1;
+}
+
+.site-header.is-settled .site-header__link {
+  color: var(--background-color);
+}
+
+.site-header__toggle {
+  flex: none;
+  width: var(--height-bubble);
+  min-width: 0;
+  margin-left: var(--small-gap);
+  overflow: hidden;
+}
+
+.site-header:not([data-open]) .site-header__toggle {
+  overflow: visible;
+  transition:
+    width var(--transition-duration) linear,
+    margin-left var(--transition-duration) linear,
+    overflow 0s linear var(--transition-duration);
+}
+
+.site-header[data-open] .site-header__nav {
+  width: max-content;
+  margin-left: var(--small-gap);
+}
+
+.site-header[data-open]:not([data-closing]) .site-header__toggle {
+  width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  transition: none;
+}
+
+.site-header[data-closing] .site-header__toggle {
+  overflow: hidden;
+  transition:
+    width var(--transition-duration) linear,
+    margin-left var(--transition-duration) linear;
+}
+
+@media (max-width: 30rem) {
+  .site-header[data-open] {
+    flex-direction: column;
+    align-items: flex-start;
+    height: auto;
+    gap: var(--small-gap);
+  }
+
+  .site-header[data-open] .site-header__nav {
+    width: auto;
+    max-width: calc(100vw - var(--margin) * 2);
+    margin-left: 0;
+  }
+
+  .site-header[data-open] .site-header__links {
+    flex-wrap: wrap;
+    width: auto;
+    max-width: calc(100vw - var(--margin) * 2);
+  }
+
+  .site-header[data-open] .site-header__toggle {
+    display: none;
+  }
+}
+
+@media (scripting: none) {
+  .site-header__nav {
+    width: max-content;
+    margin-left: var(--small-gap);
+    overflow: visible;
+  }
+
+  .site-header__link {
+    --bubble: 1;
+    width: max-content;
+    color: var(--background-color);
+  }
+
+  .site-header__toggle {
+    display: none;
+  }
+}

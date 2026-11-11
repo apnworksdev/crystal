@@ -16,18 +16,21 @@ const paragraph = (text) => ({
   children: [{ _type: 'span', _key: 's', text, marks: [] }],
 });
 
-const project = (id, title, brand, year, categories, picture, pages) => ({
+const project = (id, title, brand, year, categories, picture, pages, time) => ({
   _id: id,
   title,
   slug: id,
   brand,
   year,
+  time,
   categories,
   description: [paragraph('Placeholder description. Connect Sanity and publish a project to replace it.')],
-  director: 'Director Name',
-  starring: 'Actor Name, Actor Name',
-  screenplay: 'Writer Name',
-  edited: 'Editor Name',
+  credits: [
+    paragraph('Director: Director Name'),
+    paragraph('Starring: Actor Name, Actor Name'),
+    paragraph('Screenplay: Writer Name'),
+    paragraph('Edited by: Editor Name'),
+  ],
   showInWork: pages.includes('work'),
   showInArchive: pages.includes('archive'),
   thumbnail: image(picture, title),
@@ -35,8 +38,8 @@ const project = (id, title, brand, year, categories, picture, pages) => ({
 });
 
 export const projects = [
-  project('north-light', 'North Light', 'Sample Studio', 2026, ['trailer', 'music'], 'north-light', ['work']),
-  project('ember', 'Ember', 'Sample Brand', 2025, ['sound-design', 'mix'], 'ember', ['work', 'archive']),
+  project('north-light', 'North Light', 'Sample Studio', 2026, ['trailer', 'music'], 'north-light', ['work'], '00:01:12:00'),
+  project('ember', 'Ember', 'Sample Brand', 2025, ['sound-design', 'mix'], 'ember', ['work', 'archive'], '00:02:04:00'),
   project('moss', 'Moss', 'Sample Games', 2024, ['games', 'music'], 'moss', ['archive']),
   project('static', 'Static', 'Sample Agency', 2023, ['advertisement'], 'north-light', ['archive']),
 ];

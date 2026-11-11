@@ -1,0 +1,100 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import { CATEGORIES } from '../lib/format.js';
+import '../styles/components/project-list.css';
+
+const { projects } = Astro.props;
+
+const stillFor = (media) => {
+  if (media?.kind === 'image') return media;
+  return media?.poster?.src ? media.poster : null;
+};
+
+const rows = projects.map((project, index) => ({
+  href: `/projects/${stegaClean(project.slug)}`,
+  index: String(index + 1).padStart(3, '0'),
+  title: project.title,
+  brand: project.brand,
+  year: project.year,
+  time: project.time,
+  categories: (project.categories ?? []).map((value) => stegaClean(value)).join(' '),
+  still: stillFor(project.thumbnail),
+}));
+const firstStill = rows.find((row) => row.still)?.still;
+---
+
+{
+  rows.length > 0 && (
+    <section class="work-list" data-work-list hidden>
+      <div class="work-list__layout">
+        <div class="work-list__still">
+          {
+            firstStill && (
+              <img
+                src={firstStill.src}
+                srcset={firstStill.srcset}
+                sizes="(min-width: 70rem) 60rem, 75vw"
+                alt=""
+                data-work-still
+              />
+            )
+          }
+        </div>
+        <div class="work-list__table">
+          <div class="work-list__head">
+            <span>Index</span>
+            <span>Project Title</span>
+            <span>Brand</span>
+            <span>Year</span>
+            <span>Time</span>
+          </div>
+          <ol class="work-list__rows">
+            {rows.map((row) => (
+              <li>
+                <a
+                  class="work-list__row"
+                  href={row.href}
+                  data-work-row
+                  data-categories={row.categories}
+                  data-still={row.still?.src}
+                >
+                  <span data-index>{row.index}</span>
+                  <span class="work-list__title">{row.title}</span>
+                  <span class="work-list__brand">{row.brand}</span>
+                  <span>{row.year}</span>
+                  <span>{row.time}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+          <p class="work-list__empty" data-work-empty hidden>
+            No projects in this filter.
+          </p>
+        </div>
+        <div class="work-list__filters">
+          <button class="work-list__filter" type="button" data-filters-open>
+            Filters
+          </button>
+          <button class="work-list__filter" type="button" data-filters-close hidden>
+            Close
+          </button>
+          <div class="work-list__panel" data-filters-panel hidden>
+            {CATEGORIES.map((category) => (
+              <button
+                class="work-list__filter"
+                type="button"
+                data-filter={category.value}
+                aria-pressed="false"
+              >
+                {category.label}
+              </button>
+            ))}
+            <button class="work-list__filter" type="button" data-filter="all" aria-pressed="true">
+              All
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}

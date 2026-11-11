@@ -1,5 +1,10 @@
 // Runs on the first load and again after each page transition.
 
+import { setUpHeader } from './header.js';
+import { setUpReel } from './reel.js';
+import { setUpRoulette } from './roulette.js';
+import { setUpWork } from './work.js';
+
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let observer;
 
@@ -42,6 +47,10 @@ function showPopup() {
 function setUpPage() {
   setUpVideos();
   showPopup();
+  setUpHeader();
+  setUpRoulette();
+  setUpReel();
+  setUpWork();
 }
 
 /** Loads Vimeo's player only when someone clicks play, to keep pages light. */
@@ -50,7 +59,7 @@ document.addEventListener('click', (event) => {
   if (!button) return;
 
   const frame = document.createElement('iframe');
-  frame.className = 'video-frame';
+  frame.className = 'media__player';
   frame.src = button.dataset.vimeoPlayer;
   frame.title = 'Video player';
   frame.allow = 'autoplay; fullscreen; picture-in-picture';

@@ -1,5 +1,5 @@
 ---
-import ProjectGrid from '../components/ProjectGrid.astro';
+import ProjectRoulette from '../components/ProjectRoulette.astro';
 import Base from '../layouts/Base.astro';
 import { getHomeProjects } from '../lib/content.js';
 
@@ -7,6 +7,6 @@ const projects = await getHomeProjects();
 ---
 
 <Base>
-  <h1 class="visually-hidden">Selected work</h1>
-  <ProjectGrid projects={projects} emptyText="Pick projects for the home page in the Studio." />
+  <h1 class="sr-only">Selected work</h1>
+  <ProjectRoulette projects={projects} />
 </Base>

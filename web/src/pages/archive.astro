@@ -12,20 +12,20 @@ const projects = await getArchiveProjects();
     projects.length > 0 ? (
       <ul class="archive">
         {projects.map((project) => (
-          <li>
-            <a href={`/projects/${project.slug}`}>
-              <span class="archive-title" transition:name={`project-${project.slug}-title`}>
+          <li class="archive__item">
+            <a class="archive__link" href={`/projects/${project.slug}`}>
+              <span class="archive__title" transition:name={`project-${project.slug}-title`}>
                 {project.title}
               </span>
-              <span>{project.brand}</span>
-              <span>{formatCategories(project.categories)}</span>
-              <span class="archive-year">{project.year}</span>
+              <span class="archive__brand">{project.brand}</span>
+              <span class="archive__categories">{formatCategories(project.categories)}</span>
+              <span class="archive__year">{project.year}</span>
             </a>
           </li>
         ))}
       </ul>
     ) : (
-      <p class="empty">No projects yet.</p>
+      <p class="empty-message">No projects yet.</p>
     )
   }
 </Base>

@@ -4,7 +4,7 @@
  * - loop: muted and looping, plays only while on screen (thumbnails)
  * - player: plays with sound and controls (main media)
  */
-const { media, sizes = '100vw', priority = false, mode = 'loop' } = Astro.props;
+const { media, sizes = '100vw', priority = false, eager = false, mode = 'loop', plain = false } = Astro.props;
 const image = media?.kind === 'image' ? media : media?.poster;
 const isVimeo = media?.kind === 'video' && media.source === 'vimeo';
 const isFile = media?.kind === 'video' && media.source === 'file';
@@ -13,14 +13,14 @@ const isFile = media?.kind === 'video' && media.source === 'file';
 {
   image && (mode === 'player' || !isFile) && (
     <img
-      class:list={{ 'media-under': media.kind === 'video' }}
+      class={media.kind === 'video' ? 'media__poster' : 'media__image'}
       src={image.src}
       srcset={image.srcset}
-      sizes={image.srcset ? sizes : undefined}
-      width={image.width}
-      height={image.height}
+      sizes={plain || !image.srcset ? undefined : sizes}
+      width={plain ? undefined : image.width}
+      height={plain ? undefined : image.height}
       alt={media.kind === 'video' ? '' : image.alt}
-      loading={priority ? 'eager' : 'lazy'}
+      loading={priority || eager ? 'eager' : 'lazy'}
       fetchpriority={priority ? 'high' : undefined}
       decoding="async"
       style={image.lqip ? `background: url(${image.lqip}) center / cover` : undefined}
@@ -30,7 +30,7 @@ const isFile = media?.kind === 'video' && media.source === 'file';
 
 {
   isVimeo && mode === 'player' && (
-    <button class="video-play" type="button" data-vimeo-player={media.playerSrc}>
+    <button class="media__play" type="button" data-vimeo-player={media.playerSrc}>
       Play video
     </button>
   )
@@ -39,7 +39,7 @@ const isFile = media?.kind === 'video' && media.source === 'file';
 {
   isVimeo && mode === 'loop' && (
     <iframe
-      class="video-loop"
+      class="media__loop"
       src={media.loopSrc}
       loading="lazy"
       allow="autoplay"
@@ -53,9 +53,17 @@ const isFile = media?.kind === 'video' && media.source === 'file';
 {
   isFile &&
     (mode === 'player' ? (
-      <video src={media.src} poster={image?.src} controls playsinline preload="metadata" />
+      <video
+        class="media__video"
+        src={media.src}
+        poster={image?.src}
+        controls
+        playsinline
+        preload="metadata"
+      />
     ) : (
       <video
+        class="media__video"
         src={media.src}
         poster={image?.src}
         data-autoplay

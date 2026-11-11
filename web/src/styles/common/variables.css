@@ -1,0 +1,38 @@
+:root {
+  --red: #FF0338;
+  --white: #F7F7F7;
+  --black: #201212;
+
+  --background-color: var(--white);
+  --foreground-color: var(--red);
+
+  --selection-background-color: var(--foreground-color);
+  --selection-foreground-color: var(--background-color);
+
+  --font-family: serif;
+  --font-size: 16px;
+  --font-weight: 700;
+  --line-height: 114.99999999999999%;
+  --letter-spacing: 0%;
+  --font-size-huge: 120px;
+  --line-height-huge: 90%;
+  --letter-spacing-huge: -4%;
+
+
+  --font-family-mono: monospace;
+  --font-size-mono: 10px;
+  --font-weight-mono: 400;
+  --line-height-mono: 110.00000000000001%;
+  --letter-spacing-mono: 0%;
+
+  --height-bubble: 24px;
+
+  --margin: 20px;
+  --gap: 10px;
+  --inline-gap: 7px;
+  --small-gap: 1px;
+  --big-gap: 50px;
+
+  --transition-duration: 0.25s;
+  --transition-timing-function: ease;
+}

@@ -1,0 +1,51 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import Media from './Media.astro';
+import '../styles/components/project-roulette.css';
+
+const { projects } = Astro.props;
+---
+
+{
+  projects.length > 0 ? (
+    <section
+      class="project-roulette"
+      data-roulette
+      aria-roledescription="carousel"
+      aria-label="Selected work"
+    >
+      <div class="project-roulette__viewport">
+        <ul class="project-roulette__track">
+          {projects.map((project, index) => {
+            const slug = stegaClean(project.slug);
+            const title = stegaClean(project.title);
+            const frame = project.thumbnail?.kind === 'image' ? project.thumbnail : project.thumbnail?.poster;
+            const ratio = frame?.width > 0 && frame?.height > 0 ? frame.width / frame.height : 0;
+            return (
+              <li class="project-roulette__slide" data-slug={slug} data-title={title}>
+                <a
+                  class="project-roulette__card"
+                  href={`/projects/${slug}`}
+                  data-roulette-link
+                  tabindex={index === 0 ? 0 : -1}
+                  aria-label={title}
+                  transition:name={`project-${slug}-media`}
+                >
+                  <div
+                    class="project-roulette__media"
+                    data-ratio={ratio ? true : undefined}
+                    style={ratio ? `--roulette-ratio: ${ratio.toFixed(4)}` : undefined}
+                  >
+                    <Media media={project.thumbnail} plain eager priority={index < 2} />
+                  </div>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  ) : (
+    <p class="empty-message">Pick projects for the home page in the Studio.</p>
+  )
+}

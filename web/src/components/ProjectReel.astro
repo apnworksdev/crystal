@@ -1,0 +1,67 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import '../styles/components/project-reel.css';
+
+const { projects } = Astro.props;
+
+const stillFor = (media) => {
+  if (media?.kind === 'image') return media;
+  return media?.poster?.src ? media.poster : null;
+};
+
+const cards = projects.map((project) => ({
+  slug: stegaClean(project.slug),
+  brand: stegaClean(project.brand) ?? '',
+  title: stegaClean(project.title) ?? '',
+  still: stillFor(project.thumbnail),
+}));
+const first = cards[0];
+---
+
+<h1 class="sr-only">Work</h1>
+{
+  cards.length > 0 ? (
+    <section
+      class="project-reel"
+      data-reel
+      aria-label="Work"
+      style={`--reel-steps: ${Math.max(cards.length - 1, 0)}`}
+    >
+      <div class="project-reel__stage">
+        <p class="project-reel__brand" data-reel-brand>
+          {first.brand}
+        </p>
+        <div class="project-reel__stack">
+          {cards.map((card, index) => (
+            <a
+              class="project-reel__card"
+              href={`/projects/${card.slug}`}
+              data-reel-card
+              data-brand={card.brand}
+              data-title={card.title}
+              tabindex={index === 0 ? 0 : -1}
+            >
+              {
+                card.still && (
+                  <img
+                    src={card.still.src}
+                    srcset={card.still.srcset}
+                    sizes="(min-width: 70rem) 40rem, 52vw"
+                    alt=""
+                    transition:name={`project-${card.slug}-media`}
+                  />
+                )
+              }
+            </a>
+          ))}
+        </div>
+        <h2 class="project-reel__title" data-reel-title>
+          {first.title}
+        </h2>
+      </div>
+      <div class="project-reel__run" aria-hidden="true" />
+    </section>
+  ) : (
+    <p class="empty-message">No projects yet.</p>
+  )
+}

@@ -7,28 +7,28 @@ const awards = await getAwards();
 ---
 
 <Base title="Awards">
-  <h1 class="visually-hidden">Awards</h1>
+  <h1 class="sr-only">Awards</h1>
   {
     awards.length > 0 ? (
       <ul class="awards">
         {awards.map((award) => (
           <li class="award">
-            <p class="award-text">
-              <span>{award.ceremony}</span>
-              <span>{award.category}</span>
-              {award.work && <span>{award.work}</span>}
+            <p class="award__text">
+              <span class="award__ceremony">{award.ceremony}</span>
+              <span class="award__category">{award.category}</span>
+              {award.work && <span class="award__work">{award.work}</span>}
             </p>
             {award.image && (
-              <div class="award-image">
+              <div class="award__image">
                 <Media media={award.image} sizes="320px" />
               </div>
             )}
-            <span class="award-year">{award.year}</span>
+            <span class="award__year">{award.year}</span>
           </li>
         ))}
       </ul>
     ) : (
-      <p class="empty">No awards yet.</p>
+      <p class="empty-message">No awards yet.</p>
     )
   }
 </Base>

@@ -3,14 +3,16 @@ import { toHTML } from '@portabletext/to-html';
 /** Rich text from Sanity as HTML. Links are escaped and checked by the renderer. */
 export const richTextToHtml = (blocks) => (blocks?.length ? toHTML(blocks) : '');
 
-const CATEGORY_LABELS = {
-  trailer: 'Trailer',
-  'sound-design': 'Sound design',
-  music: 'Music',
-  mix: 'Mix',
-  games: 'Games',
-  advertisement: 'Advertisement',
-};
+export const CATEGORIES = [
+  { value: 'trailer', label: 'Trailer' },
+  { value: 'sound-design', label: 'Sound design' },
+  { value: 'music', label: 'Music' },
+  { value: 'mix', label: 'Mix' },
+  { value: 'games', label: 'Games' },
+  { value: 'advertisement', label: 'Advertisement' },
+];
+
+const CATEGORY_LABELS = Object.fromEntries(CATEGORIES.map(({ value, label }) => [value, label]));
 
 export const formatCategories = (categories) =>
   categories.map((value) => CATEGORY_LABELS[value] ?? value).join(', ');

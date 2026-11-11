@@ -1,5 +1,6 @@
 ---
-import ProjectGrid from '../components/ProjectGrid.astro';
+import ProjectList from '../components/ProjectList.astro';
+import ProjectReel from '../components/ProjectReel.astro';
 import Base from '../layouts/Base.astro';
 import { getWorkProjects } from '../lib/content.js';
 
@@ -7,6 +8,6 @@ const projects = await getWorkProjects();
 ---
 
 <Base title="Work">
-  <h1 class="page-title">Work</h1>
-  <ProjectGrid projects={projects} />
+  <ProjectReel projects={projects} />
+  <ProjectList projects={projects} />
 </Base>

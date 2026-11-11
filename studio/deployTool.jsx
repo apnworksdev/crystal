@@ -54,49 +54,61 @@ function DeployTool() {
   };
 
   return (
-    <Container width={1} padding={5}>
-      <Stack space={5}>
-        <Heading as="h1" size={2}>
-          Put changes live
-        </Heading>
+    <Container width={1} paddingX={4} paddingY={6}>
+      <Stack gap={5}>
+        <Stack gap={3}>
+          <Heading as="h1" size={2}>
+            Put changes live
+          </Heading>
+          <Text muted>
+            Publishing saves your changes in Sanity. This puts everything published on the public
+            site.
+          </Text>
+        </Stack>
 
-        {status && (
-          <Stack space={4}>
-            <Text>
-              {status.waiting > 0
-                ? `${plural(status.waiting, 'published change')} waiting to go live.`
-                : 'No published changes are waiting.'}
-            </Text>
-            {status.drafts > 0 && (
-              <Text muted>
-                {plural(status.drafts, 'unpublished draft')} won’t go live until published.
+        <Card padding={4} radius={3} border tone={status?.waiting > 0 ? 'caution' : 'default'}>
+          {status ? (
+            <Stack gap={4}>
+              <Text size={2} weight="medium">
+                {status.waiting > 0
+                  ? `${plural(status.waiting, 'published change')} waiting to go live`
+                  : 'The site is up to date with published content'}
               </Text>
-            )}
-            <Text muted size={1}>
-              {status.lastDeploy
-                ? `Last requested ${new Date(status.lastDeploy).toLocaleString()}.`
-                : 'Nothing has been put live from here yet.'}
-            </Text>
-          </Stack>
-        )}
+              {status.drafts > 0 && (
+                <Text muted>
+                  {plural(status.drafts, 'unpublished draft')} won’t go live until published.
+                </Text>
+              )}
+              <Text muted size={1}>
+                {status.lastDeploy
+                  ? `Last put live ${new Date(status.lastDeploy).toLocaleString()}`
+                  : 'Nothing has been put live from here yet.'}
+              </Text>
+            </Stack>
+          ) : (
+            <Text muted>Checking for changes…</Text>
+          )}
+        </Card>
 
         <Flex>
           <Button
             icon={RocketIcon}
             text={state === 'sending' ? 'Requesting…' : 'Put changes live'}
             tone="primary"
+            fontSize={2}
+            padding={4}
             disabled={state === 'sending' || !status}
             onClick={() => setConfirming(true)}
           />
         </Flex>
 
         {state === 'sent' && (
-          <Card padding={3} radius={2} tone="positive">
+          <Card padding={4} radius={3} tone="positive">
             <Text>Deploy requested. The site usually updates within a few minutes.</Text>
           </Card>
         )}
         {state === 'error' && (
-          <Card padding={3} radius={2} tone="critical">
+          <Card padding={4} radius={3} tone="critical">
             <Text>That didn’t work. Check that your account can edit content, then try again.</Text>
           </Card>
         )}
@@ -107,14 +119,14 @@ function DeployTool() {
           id="confirm-deploy"
           header="Put changes live?"
           onClose={() => setConfirming(false)}
-          width={0}
+          width={1}
         >
           <Box padding={4}>
-            <Stack space={4}>
-              <Text>All published content goes live on the public site.</Text>
+            <Stack gap={4}>
+              <Text>Everything published goes live on the public site. This starts one Netlify deploy.</Text>
               <Flex gap={2} justify="flex-end">
                 <Button mode="ghost" text="Cancel" onClick={() => setConfirming(false)} />
-                <Button tone="primary" text="Put changes live" onClick={deploy} />
+                <Button tone="primary" icon={RocketIcon} text="Put changes live" onClick={deploy} />
               </Flex>
             </Stack>
           </Box>

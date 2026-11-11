@@ -10,10 +10,10 @@ const products = await getProducts();
   <h1 class="page-title">Merch</h1>
   {
     products.length > 0 ? (
-      <ul class="products">
+      <ul class="product-list">
         {products.map((product, index) => (
           <li class="product">
-            <div class="product-images" tabindex={product.images.length > 1 ? 0 : undefined}>
+            <div class="product__images" tabindex={product.images.length > 1 ? 0 : undefined}>
               {product.images.map((image, imageIndex) => (
                 <Media
                   media={image}
@@ -22,18 +22,18 @@ const products = await getProducts();
                 />
               ))}
             </div>
-            <div class="product-text">
-              <h2>{product.title}</h2>
-              <span>{product.price}</span>
+            <div class="product__info">
+              <h2 class="product__title">{product.title}</h2>
+              <span class="product__price">{product.price}</span>
             </div>
-            <a class="product-buy" href={product.url} target="_blank" rel="noopener">
-              Buy<span class="visually-hidden"> {product.title} (opens in a new tab)</span>
+            <a class="product__buy" href={product.url} target="_blank" rel="noopener">
+              Buy<span class="sr-only"> {product.title} (opens in a new tab)</span>
             </a>
           </li>
         ))}
       </ul>
     ) : (
-      <p class="empty">No products yet.</p>
+      <p class="empty-message">No products yet.</p>
     )
   }
 </Base>

@@ -9,11 +9,17 @@ const Wrapper = popup.link ? 'a' : 'div';
 ---
 
 <dialog class="popup" data-popup-key={key} aria-labelledby="popup-title">
-  <form method="dialog">
-    <button class="popup-close" aria-label="Close">×</button>
+  <form class="popup__header" method="dialog">
+    <button class="popup__close" aria-label="Close">×</button>
   </form>
-  <Wrapper class="popup-body" href={popup.link}>
-    <Media media={popup.image} sizes="(min-width: 600px) 480px, 90vw" />
-    <h2 id="popup-title">{popup.title}</h2>
+  <Wrapper class="popup__body" href={popup.link}>
+    {
+      popup.image && (
+        <div class="popup__image">
+          <Media media={popup.image} sizes="(min-width: 600px) 480px, 90vw" />
+        </div>
+      )
+    }
+    <h2 class="popup__title" id="popup-title">{popup.title}</h2>
   </Wrapper>
 </dialog>

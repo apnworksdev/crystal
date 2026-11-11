@@ -12,10 +12,6 @@ export const isPreview = SITE_MODE === 'preview';
 const EDITABLE_FIELDS = new Set([
   'title',
   'brand',
-  'director',
-  'starring',
-  'screenplay',
-  'edited',
   'ceremony',
   'category',
   'work',
@@ -25,6 +21,7 @@ const EDITABLE_FIELDS = new Set([
   'description',
   'favouriteTrack',
   'text',
+  'time',
 ]);
 
 function createSanityClient() {
@@ -66,9 +63,8 @@ const QUERIES = {
     popup { enabled, title, link, image ${IMAGE} }
   }`,
   projects: `*[_type == "project" && defined(slug.current)] | order(year desc, title asc) {
-    _id, title, "slug": slug.current, brand, year, categories, description,
-    director, starring, screenplay, edited, showInWork, showInArchive,
-    mainMedia ${MEDIA}, thumbnail ${MEDIA}
+    _id, title, "slug": slug.current, brand, year, time, categories, description, credits,
+    showInWork, showInArchive, mainMedia ${MEDIA}, thumbnail ${MEDIA}
   }`,
   homeProjectIds: `*[_type == "homePage"][0].projects[]._ref`,
   awards: `*[_type == "award"] | order(year desc, _createdAt asc) {
@@ -127,7 +123,8 @@ const toProject = async (project) => ({
   ...project,
   categories: project.categories ?? [],
   description: project.description ?? [],
-  thumbnail: await toMedia(project.thumbnail?.kind ? project.thumbnail : project.mainMedia, 16 / 9),
+  credits: project.credits ?? [],
+  thumbnail: await toMedia(project.thumbnail?.kind ? project.thumbnail : project.mainMedia),
   mainMedia: await toMedia(project.mainMedia),
 });
 

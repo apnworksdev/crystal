@@ -15,10 +15,7 @@ export const project = defineType({
   title: 'Project',
   type: 'document',
   icon: DocumentVideoIcon,
-  fieldsets: [
-    { name: 'pages', title: 'Show on', options: { columns: 2 } },
-    { name: 'credits', title: 'Credits', options: { columns: 2 } },
-  ],
+  fieldsets: [{ name: 'pages', title: 'Show on', options: { columns: 2 } }],
   fields: [
     defineField({
       name: 'title',
@@ -57,6 +54,12 @@ export const project = defineType({
       validation: (rule) => rule.required().integer().min(1900).max(2100),
     }),
     defineField({
+      name: 'time',
+      title: 'Time',
+      type: 'string',
+      description: 'Timecode in the work list, such as 00:01:58:00.',
+    }),
+    defineField({
       name: 'categories',
       type: 'array',
       of: [{ type: 'string' }],
@@ -78,10 +81,10 @@ export const project = defineType({
       name: 'description',
       type: 'richText',
     }),
-    defineField({ name: 'director', type: 'string', fieldset: 'credits' }),
-    defineField({ name: 'starring', type: 'string', fieldset: 'credits' }),
-    defineField({ name: 'screenplay', type: 'string', fieldset: 'credits' }),
-    defineField({ name: 'edited', title: 'Edited by', type: 'string', fieldset: 'credits' }),
+    defineField({
+      name: 'credits',
+      type: 'richText',
+    }),
   ],
   orderings: [
     {
