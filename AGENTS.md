@@ -10,7 +10,8 @@ and hosting on Netlify. Read this before changing structure, names or styles.
 - **Plain JavaScript only.** No TypeScript, no `.ts` files, no type generation.
 - **The site owner writes the CSS.** Don't add or restyle visual CSS unless asked. Behaviour-only CSS, such as
   view transitions, is fine, but say so when you add it.
-- **Keep the public site fast.** It's static, ships about 16 KB of JavaScript, and loads nothing from preview mode.
+- **Keep the public site fast.** It's static, and loads nothing from preview mode. Every page ships about
+  18 KB of compressed JavaScript (the shared script plus Astro's router); the home carousel adds about 12 KB on the home page only.
   Check the size of `web/dist/_astro` after adding anything that runs in the browser.
 - **The user handles Git.** Don't commit or push unless asked.
 
@@ -20,7 +21,7 @@ and hosting on Netlify. Read this before changing structure, names or styles.
 crystal-web/
 ├── web/          Astro site. Netlify builds this folder ("web" is the base directory)
 ├── studio/       Sanity Studio. Deployed to *.sanity.studio
-├── package.json  shortcuts only (dev:edit, dev:all, setup). No workspaces
+├── package.json  shortcuts only (dev:edit, dev:all, setup, test). No workspaces
 ├── AGENTS.md     this file
 ├── README.md
 └── SETUP.md
@@ -32,16 +33,18 @@ into workspaces, because Netlify would then install the Studio's dependencies on
 ## `web/src`
 
 ```
-components/   reusable pieces (Media, ProjectGrid, Popup)
-layouts/      page shell (Base.astro): head, header, footer, popup, global styles
+components/   reusable pieces (Media, ProjectRoulette, ProjectReel, ProjectList, NewsPanel, AboutPanel)
+layouts/      page shell (Base.astro): head, header (with the news panel), footer, global styles
 lib/          data and helpers, no browser code
   content.js      every Sanity query and the shape of the data pages receive
   placeholders.js sample content, used when SANITY_PROJECT_ID is empty
   video.js        turns Vimeo or MP4 links into embed data
-  format.js       rich text to HTML, category labels
+  format.js       rich text to HTML, the category list
+  pages.js        which projects get a page
+  merch-stack.js  card positions for the merch reel
 pages/        one file per route
 preview/      code that only exists in preview mode (draft-mode route, session check, click-to-edit)
-scripts/      browser code (page.js: video autoplay, popup, click-to-load Vimeo player)
+scripts/      browser code (page.js: video autoplay, click-to-load Vimeo player; news.js: the news panel)
 styles/       see below
 ```
 
@@ -50,6 +53,16 @@ styles/       see below
   Studio schema.
 - **Browser code:** goes in `scripts/` and must work after an Astro page transition. Run setup on load and on
   `astro:after-swap`, as `page.js` does. Event delegation on `document` only needs registering once.
+- **Code for one page** (the home carousel, the Work reel, the merch reel, the product strip) is listed in
+  `pageModules` in `page.js` and downloaded only when its page is open, then fetched in the background once the
+  browser is idle. Add new single-page code there instead of importing it at the top of `page.js`.
+- **Tests** sit next to the file they test (`pages.js` → `pages.test.js`) and use Node's built-in runner, with no
+  extra packages. Run `npm test` at the root, or in `web/` or `studio/`. Keep logic worth testing in plain
+  functions that don't touch the DOM, as `lib/merch-stack.js` does.
+- **Imports need a matching dependency.** Anything a file imports must be listed in its own `package.json`, even when
+  another package already installs it (`vite` in `web/`, `rxjs` in `studio/`).
+- **Non-passive `wheel` or `touchmove` listeners** make every scroll wait for JavaScript. Add them only while their
+  page is open, as `archive.js` does.
 
 ## Styles
 
@@ -61,7 +74,8 @@ web/src/styles/
 │   ├── globals.css       shared reset and utilities, reused across projects. Don't edit
 │   ├── main.css          body and main layout for this project
 │   └── transitions.css   view transition rules
-├── components/           one file per component: ProjectGrid.astro → project-grid.css
+├── components/           one file per component: ProjectReel.astro → project-reel.css. Also header, footer
+│                         and intro, which live in Base.astro
 └── pages/                one file per page: awards.astro → awards.css
 ```
 
@@ -71,6 +85,9 @@ web/src/styles/
   `import '../styles/pages/awards.css';`. Astro then only loads them on pages that need them.
 - **Never** create an index file that imports every stylesheet. It would send all the CSS to every page.
 - **`globals.css` is shared across projects.** Put project-specific base styles in `main.css` instead.
+- **Phone layout** uses one query, `(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)`, at the end of each
+  stylesheet that needs it. `header.js` repeats it as `phone`. Change all of them together. The desktop-only
+  dropping menus (archive, Work list) are wrapped in the negated query in `header.css`.
 - **Utility classes come from `globals.css`:** `.sr-only` (visually hidden, still read by screen readers) and
   `.hidden`.
 
@@ -78,10 +95,10 @@ web/src/styles/
 
 | What | Convention | Example |
 |---|---|---|
-| Astro components and layouts | PascalCase | `ProjectGrid.astro` |
+| Astro components and layouts | PascalCase | `ProjectReel.astro` |
 | Pages | Lowercase, matching the URL | `awards.astro`, `projects/[slug].astro` |
-| CSS, scripts, lib files | kebab-case | `project-grid.css`, `video.js` |
-| Component CSS file | Component name in kebab-case | `ProjectGrid.astro` → `project-grid.css` |
+| CSS, scripts, lib files | kebab-case | `project-reel.css`, `video.js` |
+| Component CSS file | Component name in kebab-case | `ProjectReel.astro` → `project-reel.css` |
 | CSS classes | BEM | `.block`, `.block__element`, `.block--modifier` |
 | CSS custom properties | kebab-case, descriptive | `--foreground-color`, `--transition-duration` |
 | Sanity types and fields | camelCase | `homePage`, `mainMedia`, `showInWork` |
@@ -90,23 +107,32 @@ web/src/styles/
 
 | Block | Where | Elements |
 |---|---|---|
-| `site-header` | Base layout | `__logo`, `__nav`, `__link` |
+| `site-header` | Base layout | `__logo`, `__nav`, `__link`, `__merch`, `__product-title`, `__product`, `__price`, `__buy` |
 | `site-footer` | Base layout | `__link` |
 | `media` | Media.astro (no wrapper element) | `__image`, `__poster`, `__video`, `__play`, `__loop`, `__player` |
-| `popup` | Popup.astro | `__header`, `__close`, `__body`, `__image`, `__title` |
-| `project-grid` | ProjectGrid.astro | `__item` |
-| `project-card` | ProjectGrid.astro | `__media`, `__info`, `__title`, `__meta` |
+| `news-panel` | NewsPanel.astro, in the header beside the logo | `__head`, `__title`, `__close`, `__body`, `__bar`, `__titles`, `__item-title`, `__arrows`, `__arrow`, `__images`, `__image` |
+| `intro` | Base layout, the opening plate on first arrival | `__plate` |
+| `site-scroll` | Base layout, the scrolling area around the page content | none |
+| `project-cover` | Created by `cover.js`: the black layer that opens and closes a project | none |
+| `project-roulette` | ProjectRoulette.astro, the home carousel | `__viewport`, `__track`, `__slide`, `__card`, `__media` |
+| `project-reel` | ProjectReel.astro, on /work | `__stage`, `__stack`, `__card`, `__run`, `__brand`, `__title` |
+| `work-list` | ProjectList.astro, the Work list on /work. Styled in `project-list.css` | `__head`, `__title`, `__filters`, `__filter`, `__layout`, `__table`, `__rows`, `__row`, `__brand`, `__panel`, `__still`, `__empty` |
 | `project` | projects/[slug] | `__header`, `__title`, `__meta`, `__media`, `__body`, `__description`, `__credits`, `__credit`, `__credit-label`, `__credit-value` |
-| `archive` | archive | `__item`, `__link`, `__title`, `__brand`, `__categories`, `__year` |
+| `archive` | archive | `__item`, `__index`, `__title`, `__brand`, `__year`, `__time` |
 | `awards`, `award` | awards | `award__text`, `__ceremony`, `__category`, `__work`, `__image`, `__year` |
-| `product-list`, `product` | merch | `product__images`, `__info`, `__title`, `__price`, `__buy` |
-| `about`, `team`, `team-member` | about | `about__text`, `team__title`, `team__list`, `team-member__image`, `__name`, `__position`, `__description`, `__track`, `__track-label` |
+| `merch-reel` | merch page | `__stage`, `__stack`, `__card`, `__run` |
+| `product-strip` | product page | `__stage`, `__track`, `__card`, `__run` |
+| `about-panel`, `team`, `team-member` | About panel in the header. There is no /about route | `about-panel__head`, `__title`, `__tabs`, `__tab`, `__close`, `__text`, `__team-link`, `__contact`, `team__list`, `team-member__name`, `__image`, `__card`, `__position`, `__description`, `__track`, `__track-label` |
+| `mirror` | Hidden /mirror page, opened by three quick clicks on the header logo. No header, footer or router | `__canvas`, `__video`, `__logo`, `__bar`, `__enter`, `__toggle`, `__slash`, `__close` |
 | `page-title`, `empty-message`, `rich-text` | Shared | none |
 
-- **`.media__*` elements** sit directly inside whatever wraps them, such as `.project-card__media` or `.award__image`.
+- **Stylesheet names that differ from their component:** `AboutPanel.astro` → `about.css`, `NewsPanel.astro` →
+  `news.css`, and `ProjectList.astro` → `project-list.css` (block `work-list`).
+
+- **`.media__*` elements** sit directly inside whatever wraps them, such as `.project-roulette__media` or `.award__image`.
   Size and crop media through the wrapper.
 - **`.project__media`** gets `data-kind="video"` or `data-kind="image"` from the main media's type, for styling.
-- **JavaScript hooks** use data attributes, not classes: `data-autoplay`, `data-popup-key`,
+- **JavaScript hooks** use data attributes, not classes: `data-autoplay`, `data-news-panel`,
   `data-vimeo-player`. Renaming a class must never break a script.
 - **Renaming:** when you rename a class, search `components`, `layouts`, `pages`, `scripts` and `styles`.
 
@@ -118,8 +144,8 @@ web/src/styles/
 | `homePage` | Single document | Ordered references to projects |
 | `award` | Documents | `ceremony`, `category`, `work`, `year`, `image` |
 | `product` | Documents | `title`, `price` (a string with currency), `url`, `images` |
-| `aboutPage` | Single document | `content` (rich text) and a `team` array |
-| `siteSettings` | Single document | Site name, SEO description, email, social links, `popup` |
+| `aboutPage` | Single document | `content` (rich text) and a `team` array. Shown in the header About panel |
+| `siteSettings` | Single document | Site name, SEO description, email, social links, `news` (items with a title, image and optional link). Opens in the header a few seconds after arrival; closing it lasts until a new tab |
 | `media` | Object | `kind` is `video` or `image`. Videos are links (`videoUrl`): Vimeo, or a direct MP4 |
 | `richText` | Array | Paragraphs, bold, italic and links only |
 
@@ -144,6 +170,10 @@ Single documents have fixed IDs equal to their type name and are listed in `SING
 - **Click-to-edit adds invisible characters** to the fields listed in `EDITABLE_FIELDS` in `lib/content.js`. Never
   add a field there that's used in a URL, an attribute, a `transition:name` or a comparison. Wrap such values in
   `stegaClean()` if in doubt.
+- **Page content fades** between pages (`fadeContentOut` and `revealContent` in `page.js`); the header has its own
+  motion. Opening or closing a project uses the black cover instead. Anything a script has to place, such as a
+  reel or strip, must be in place by the end of its setup, before the fade-in starts. Wait on animations with a timer
+  fallback too, because a background tab never starts them.
 - **Preview has no page transitions.** It uses normal page loads because click-to-edit needs a stable page, so test
   transitions with `npm run dev` or `dev:all`.
 - **Project pages look up their slug at runtime.** `pages/projects/[slug].astro` uses the slug instead of

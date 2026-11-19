@@ -1,0 +1,115 @@
+/* Merch pile: every product sits in the stack. The front one is sharp.
+   Each one behind is 4px more blurred. Scrolling matches the work reel. */
+
+body:has([data-merch-reel]) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body:has([data-merch-reel]) .site-footer {
+  display: none;
+}
+
+.merch-reel {
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.merch-reel__stage {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  height: 100dvh;
+  padding: var(--margin);
+  box-sizing: border-box;
+  /* The bigger products at the back spill past the sides. Clipped here so they don't make the reel scroll sideways. */
+  overflow-x: clip;
+}
+
+.merch-reel__run {
+  height: calc(var(--reel-steps) * 70vh);
+}
+
+.merch-reel__stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.merch-reel__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: max-content;
+  max-width: min(52vw, 40rem);
+  transform: translate(-50%, -50%);
+}
+
+/* Only the front picture is painted until the reel script places the rest. */
+.merch-reel__card:not(:first-child) {
+  visibility: hidden;
+}
+
+.merch-reel__card:focus-visible {
+  outline: 2px solid var(--foreground-color);
+  outline-offset: 2px;
+}
+
+.merch-reel__card {
+  --card-max-width: min(52vw, 40rem);
+  --card-max-height: 42vh;
+}
+
+.merch-reel__card img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: var(--card-max-width);
+  max-height: var(--card-max-height);
+  pointer-events: none;
+}
+
+/* The ratio is known before the file arrives, so the frame already has its size and the
+   row does not shift while it loads. Padding-bottom keeps the shape (older browsers lack
+   aspect-ratio); the picture fills the frame. */
+.merch-reel__card[data-ratio] {
+  width: min(var(--card-max-width), calc(var(--card-max-height) * var(--ratio)));
+}
+
+.merch-reel__card[data-ratio]::before {
+  content: '';
+  display: block;
+  padding-bottom: calc(100% / var(--ratio));
+}
+
+.merch-reel__card[data-ratio] img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+@media (max-width: 40rem) {
+  .merch-reel__card {
+    --card-max-width: min(78vw, 40rem);
+    --card-max-height: 32vh;
+    max-width: min(78vw, 40rem);
+  }
+}
+
+/* Phone: the pile fills the space above the docked header. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .merch-reel__card {
+    --card-max-width: calc(100vw - var(--margin) * 2);
+    --card-max-height: 56dvh;
+    max-width: calc(100vw - var(--margin) * 2);
+  }
+}

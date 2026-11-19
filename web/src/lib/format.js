@@ -11,8 +11,3 @@ export const CATEGORIES = [
   { value: 'games', label: 'Games' },
   { value: 'advertisement', label: 'Advertisement' },
 ];
-
-const CATEGORY_LABELS = Object.fromEntries(CATEGORIES.map(({ value, label }) => [value, label]));
-
-export const formatCategories = (categories) =>
-  categories.map((value) => CATEGORY_LABELS[value] ?? value).join(', ');

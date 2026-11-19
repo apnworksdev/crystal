@@ -1,0 +1,83 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import Media from './Media.astro';
+import { richTextToHtml } from '../lib/format.js';
+import '../styles/components/about.css';
+
+const { about, email } = Astro.props;
+const html = richTextToHtml(about?.content);
+const address = stegaClean(email ?? '');
+const team = about?.team ?? [];
+---
+
+<div class="about-panel" id="about-panel" data-about-panel hidden inert role="region" aria-labelledby="about-title">
+  <div class="about-panel__copy">
+    <div class="about-panel__head">
+      <h2 class="about-panel__title" id="about-title">About</h2>
+      {/* Phone only: the copy and the team take turns in the panel. */}
+      {
+        team.length > 0 && (
+          <div class="about-panel__tabs">
+            <button class="about-panel__tab" type="button" data-about-tab="about" aria-pressed="true">
+              About
+            </button>
+            <button class="about-panel__tab" type="button" data-about-tab="team" aria-pressed="false">
+              Team
+            </button>
+          </div>
+        )
+      }
+      <button class="about-panel__close" type="button" data-about-close aria-label="Close about">
+        <svg viewBox="0 0 11 11" aria-hidden="true">
+          <path d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z" fill="currentColor"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="about-panel__body">
+      {html && <div class="about-panel__text rich-text" set:html={html} />}
+      {
+        team.length > 0 && (
+          <button class="about-panel__team-link" type="button" data-about-tab="team">
+            Meet our team
+          </button>
+        )
+      }
+      <form class="about-panel__contact" data-about-form data-email={address || undefined}>
+        <p class="about-panel__label">Get in touch:</p>
+        <label class="sr-only" for="about-message">Message</label>
+        <textarea id="about-message" name="message" rows="6"></textarea>
+        <button class="about-panel__send" type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+  {
+    team.length > 0 && (
+      <div class="about-panel__team">
+        <ul class="team__list">
+          {team.map((member, index) => (
+            <li class="team-member">
+              <p class="team-member__name">{member.name}</p>
+              {member.image && (
+                <div class="team-member__image" tabindex={member.position || member.description || member.favouriteTrack ? '0' : undefined}>
+                  <Media media={member.image} sizes="180px" eager={index < 6} />
+                  {(member.position || member.description || member.favouriteTrack) && (
+                    <div class="team-member__card">
+                      {member.position && <p class="team-member__position">{member.position}</p>}
+                      {member.description && <p class="team-member__description">{member.description}</p>}
+                      {member.favouriteTrack && (
+                        <p class="team-member__track">
+                          <span class="team-member__track-label">Her favorite track</span>
+                          {member.favouriteTrack}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+</div>

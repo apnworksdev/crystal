@@ -4,10 +4,12 @@
   "scripts": {
     "setup": "npm install && npm --prefix web install && npm --prefix studio install",
     "dev": "npm --prefix web run dev",
+    "dev:host": "npm --prefix web run dev:host",
     "dev:preview": "npm --prefix web run dev:preview",
     "studio": "npm --prefix studio run dev",
     "dev:all": "concurrently --kill-others --names site,studio --prefix-colors blue,magenta \"npm:dev\" \"npm:studio\"",
-    "dev:edit": "concurrently --kill-others --names preview,studio --prefix-colors green,magenta \"npm:dev:preview\" \"npm:studio\""
+    "dev:edit": "concurrently --kill-others --names preview,studio --prefix-colors green,magenta \"npm:dev:preview\" \"npm:studio\"",
+    "test": "npm --prefix web test && npm --prefix studio test"
   },
   "devDependencies": {
     "concurrently": "^10.0.7"

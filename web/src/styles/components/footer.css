@@ -1,0 +1,52 @@
+/* The footer scrolls with the page and stops with its top against the nav.
+   The nav is fixed at the vertical center, so the footer block fills the
+   lower half of the viewport. */
+
+.site-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: calc(50dvh - var(--height-bubble) / 2);
+  margin-left: var(--margin);
+  padding-top: 5px;
+}
+
+.site-footer__link,
+.site-footer__label {
+  display: block;
+}
+
+.site-footer__form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--inline-gap);
+  width: min(22rem, calc(100vw - var(--margin) * 2));
+}
+
+.site-footer__form input {
+  field-sizing: content;
+  width: auto;
+  max-width: 14rem;
+  background: transparent;
+  color: inherit;
+}
+
+.site-footer__rule {
+  flex: 1 1 auto;
+  min-width: 2rem;
+  margin-bottom: 0.2em;
+  border-bottom: 1px solid currentColor;
+}
+
+/* Product page: price and Buy hang below the nav, so the footer stops below them. */
+body[data-page='product'] .site-footer {
+  padding-top: calc(var(--height-bubble) + 5px);
+}
+
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  body[data-page='product'] .site-footer {
+    padding-top: 5px;
+  }
+}

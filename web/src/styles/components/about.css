@@ -1,0 +1,445 @@
+/* About replaces the open nav. The wordmark and + stay on the header
+   row. The copy is a full-height column beside the wordmark. The team sits
+   centered on that row, as tall as its members, and never taller than six
+   and a half of them. */
+
+@property --about {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.about-panel {
+  --about: 0;
+  transition: --about var(--transition-duration) linear;
+}
+
+.about-panel[hidden] {
+  display: none;
+}
+
+.site-header[data-about] .about-panel {
+  --about: 1;
+}
+
+.site-header[data-about][data-about-closing] .about-panel {
+  --about: 0;
+}
+
+.site-header[data-about] {
+  --about-col: min(22rem, calc((100vw - var(--margin) * 2 - 8rem) / 2));
+  top: var(--margin);
+  height: calc(100dvh - var(--margin) * 2);
+  width: max-content;
+  transform: none;
+  align-items: center;
+  pointer-events: none;
+}
+
+.site-header[data-about] .site-header__logo,
+.site-header[data-about] .site-header__toggle,
+.site-header[data-about] .about-panel__copy,
+.site-header[data-about] .about-panel__team {
+  pointer-events: auto;
+}
+
+.site-header[data-about] .site-header__logo,
+.site-header[data-about] .site-header__toggle {
+  position: relative;
+  z-index: 1;
+}
+
+.site-header[data-about] .site-header__logo:focus-visible,
+.site-header[data-about] .site-header__toggle:focus-visible,
+.about-panel :focus-visible {
+  outline-color: var(--background-color);
+}
+
+.team-member__card :focus-visible {
+  outline-color: var(--foreground-color);
+}
+
+.site-header[data-about] .site-header__context,
+.site-header[data-about] .site-header__views {
+  display: none;
+}
+
+.site-header[data-about] .site-header__nav,
+.site-header[data-about]:not([data-open]) .site-header__nav:has([aria-current='page']) {
+  width: 0;
+  margin-left: 0;
+  overflow: hidden;
+}
+
+.site-header[data-about] .site-header__links .site-header__link,
+.site-header[data-about] .site-header__links .site-header__link[aria-current='page'] {
+  --bubble: 0;
+  width: 0;
+  padding-inline: 0;
+  color: transparent;
+}
+
+.site-header[data-about] .about-panel:not([hidden]) {
+  order: 1;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  width: calc(var(--about-col) * 2 + var(--small-gap));
+  height: calc(100dvh - var(--margin) * 2);
+  min-width: 0;
+  margin-left: var(--small-gap);
+  overflow: hidden;
+  /* Full size from the first frame, then uncovered from the header row. */
+  clip-path: inset(calc((1 - var(--about)) * 50%) 0);
+  pointer-events: none;
+  gap: var(--small-gap);
+}
+
+.site-header[data-about] .site-header__toggle {
+  order: 2;
+  width: var(--height-bubble);
+  margin-left: var(--small-gap);
+  overflow: visible;
+  display: flex;
+}
+
+.about-panel ::selection {
+  background: var(--background-color);
+  color: var(--foreground-color);
+}
+
+.team-member__card ::selection {
+  background: var(--foreground-color);
+  color: var(--background-color);
+}
+
+.about-panel__copy {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--small-gap);
+  width: var(--about-col);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  color: var(--background-color);
+}
+
+.about-panel__head,
+.about-panel__body {
+  padding-inline: var(--gap);
+  background: var(--foreground-color);
+}
+
+.about-panel__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--height-bubble);
+  padding-inline: var(--gap) 0;
+}
+
+.about-panel__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: var(--margin);
+  padding-bottom: var(--margin);
+}
+
+.about-panel__title {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
+.about-panel__close,
+.about-panel__send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.about-panel__close {
+  width: var(--height-bubble);
+  height: var(--height-bubble);
+}
+
+.about-panel__close svg {
+  width: 11px;
+  height: 11px;
+}
+
+.about-panel__text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.about-panel__text p + p {
+  margin-top: 1em;
+}
+
+.about-panel__contact {
+  display: flex;
+  flex: 0 0 32%;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.about-panel__contact textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  margin-top: var(--small-gap);
+  resize: none;
+  line-height: 1.4rem;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent calc(1.4rem - 1px),
+    currentColor calc(1.4rem - 1px),
+    currentColor 1.4rem
+  );
+  background-attachment: local;
+  scrollbar-width: none;
+}
+
+.about-panel__send {
+  flex: none;
+  justify-content: flex-start;
+  height: var(--height-bubble);
+}
+
+.about-panel__team {
+  --team-w: var(--about-col);
+  /* Name, the 2px gap, and a 3:4 photo. Two photos share the row, so six
+     and a half members is 3.25 rows, with the three gaps above the cut. */
+  --member: calc((var(--team-w) - var(--margin)) / 2 * 4 / 3 + 2px + var(--font-size-mono) * 1.1);
+  flex: none;
+  width: var(--team-w);
+  max-height: min(calc(3.25 * var(--member) + 3 * var(--gap)), calc(100dvh - var(--margin) * 2));
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap);
+  overscroll-behavior: contain;
+  background: var(--foreground-color);
+  color: var(--background-color);
+  scrollbar-width: none;
+}
+
+.team__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+  align-content: start;
+  margin: 0;
+  padding: 0;
+}
+
+.team-member {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+  font-weight: var(--font-weight-medium);
+  font-size: 8px;
+  line-height: var(--line-height);
+}
+
+.team-member__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 3:4 portrait. Padding-bottom keeps the shape (older browsers lack aspect-ratio). */
+.team-member__image {
+  position: relative;
+  overflow: hidden;
+  background: var(--foreground-color);
+}
+
+.team-member__image::before {
+  content: '';
+  display: block;
+  padding-bottom: 133.3333%;
+}
+
+.team-member__image .media__image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center 42%;
+}
+
+.team-member__card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.45rem 0.45rem 0.4rem;
+  overflow: auto;
+  background: var(--background-color);
+  color: var(--foreground-color);
+  opacity: 0;
+  scrollbar-width: none;
+}
+
+.team-member:hover .team-member__card,
+.team-member:focus-within .team-member__card {
+  opacity: 1;
+}
+
+.team-member__track-label {
+  display: block;
+}
+
+html:has(.site-header[data-about]) {
+  overflow: hidden;
+}
+
+main,
+.site-footer {
+  transition: filter var(--transition-duration) linear;
+}
+
+.site-header[data-about]:not([data-about-closing]) ~ .site-scroll main,
+.site-header[data-about]:not([data-about-closing]) ~ .site-scroll .site-footer {
+  filter: blur(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about-panel,
+  main,
+  .site-footer {
+    transition: none;
+  }
+}
+
+/* Phone only: the About and Team tabs, and the link to the team. */
+.about-panel__tabs,
+.about-panel__team-link {
+  display: none;
+}
+
+/* Phone: the panel fills the screen beside c and +. The copy and the team take
+   turns in it; the head bar holds the About and Team tabs and the close. The
+   open tab is the outlined one. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .site-header[data-about] .site-header__toggle {
+    order: 0;
+  }
+
+  .site-header[data-about] .about-panel:not([hidden]) {
+    flex-direction: column;
+    align-items: stretch;
+    width: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
+  }
+
+  .about-panel__copy {
+    flex: 1 1 auto;
+    width: auto;
+    height: auto;
+  }
+
+  .about-panel__head:has(.about-panel__tabs) {
+    gap: var(--small-gap);
+    padding-inline: 0;
+    background: transparent;
+  }
+
+  .about-panel__head:has(.about-panel__tabs) .about-panel__title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .about-panel__head:has(.about-panel__tabs) .about-panel__close {
+    background: var(--foreground-color);
+  }
+
+  .about-panel__tabs {
+    display: flex;
+    flex: 1 1 auto;
+    gap: var(--small-gap);
+    height: 100%;
+  }
+
+  .about-panel__tab {
+    display: flex;
+    align-items: center;
+    padding-inline: var(--gap);
+    background: var(--foreground-color);
+    color: var(--background-color);
+    line-height: 1;
+  }
+
+  .about-panel__tab[aria-pressed='true'] {
+    flex: 1 1 auto;
+    background: var(--background-color);
+    box-shadow: inset 0 0 0 1px var(--foreground-color);
+    color: var(--foreground-color);
+  }
+
+  .about-panel__team-link {
+    display: block;
+    align-self: flex-start;
+    margin-top: 1em;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
+  .about-panel__text {
+    flex: 0 1 auto;
+  }
+
+  /* Get in touch starts level with the header row. */
+  .about-panel__contact {
+    flex: 0 0 calc(50% - var(--gap));
+    margin-top: auto;
+  }
+
+  .about-panel__team {
+    --team-w: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
+    flex: 1 1 auto;
+    width: auto;
+    max-height: none;
+  }
+
+  .about-panel:not([data-about-view='team']) .about-panel__team,
+  .about-panel[data-about-view='team'] .about-panel__body {
+    display: none;
+  }
+
+  .about-panel[data-about-view='team'] .about-panel__copy {
+    flex: none;
+  }
+
+  .team-member {
+    font-size: var(--font-size-mono);
+  }
+}
+
+/* Touch screens: a tap shows a member's card, a tap elsewhere hides it. */
+@media (hover: none) {
+  .team-member__image:focus .team-member__card {
+    opacity: 1;
+  }
+
+  .team-member__image:focus {
+    outline: none;
+  }
+}

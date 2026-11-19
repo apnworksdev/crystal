@@ -71,18 +71,55 @@ body:has([data-reel]) .site-footer {
   transform: translate(-50%, -50%);
 }
 
+/* Only the front picture is painted until the reel script places the rest. */
+.project-reel__card:not(:first-child) {
+  visibility: hidden;
+}
+
+body[data-work-view='list'] .project-reel {
+  display: none;
+}
+
 .project-reel__card:focus-visible {
   outline: 2px solid var(--foreground-color);
   outline-offset: 2px;
+}
+
+.project-reel__card {
+  --card-max-width: min(52vw, 40rem);
+  --card-max-height: 42vh;
 }
 
 .project-reel__card img {
   display: block;
   width: auto;
   height: auto;
-  max-width: min(52vw, 40rem);
-  max-height: 42vh;
+  max-width: var(--card-max-width);
+  max-height: var(--card-max-height);
   pointer-events: none;
+}
+
+/* The ratio is known before the file arrives, so the frame already has its size and the
+   row does not shift while it loads. Padding-bottom keeps the shape (older browsers lack
+   aspect-ratio); the picture fills the frame. */
+.project-reel__card[data-ratio] {
+  width: min(var(--card-max-width), calc(var(--card-max-height) * var(--ratio)));
+}
+
+.project-reel__card[data-ratio]::before {
+  content: '';
+  display: block;
+  padding-bottom: calc(100% / var(--ratio));
+}
+
+.project-reel__card[data-ratio] img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -98,12 +135,25 @@ body:has([data-reel]) .site-footer {
     font-size: min(var(--font-size-huge), 12vw);
   }
 
-  .project-reel__card,
-  .project-reel__card img {
+  .project-reel__card {
+    --card-max-width: min(78vw, 40rem);
+    --card-max-height: 32vh;
     max-width: min(78vw, 40rem);
   }
+}
 
-  .project-reel__card img {
-    max-height: 32vh;
+/* Phone: the header is docked at the bottom, so the words keep clear of it. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .project-reel__stage {
+    padding-top: 10dvh;
+    padding-bottom: calc(10dvh + var(--margin) + var(--height-bubble));
+  }
+}
+
+/* Behaviour: on touch screens reel.js moves the reel one picture per swipe, so the
+   browser's own scrolling is turned off here. */
+@media (pointer: coarse) {
+  .project-reel {
+    touch-action: none;
   }
 }

@@ -1,5 +1,5 @@
 ---
-import Media from '../components/Media.astro';
+import MerchReel from '../components/MerchReel.astro';
 import Base from '../layouts/Base.astro';
 import { getProducts } from '../lib/content.js';
 
@@ -7,33 +7,5 @@ const products = await getProducts();
 ---
 
 <Base title="Merch">
-  <h1 class="page-title">Merch</h1>
-  {
-    products.length > 0 ? (
-      <ul class="product-list">
-        {products.map((product, index) => (
-          <li class="product">
-            <div class="product__images" tabindex={product.images.length > 1 ? 0 : undefined}>
-              {product.images.map((image, imageIndex) => (
-                <Media
-                  media={image}
-                  sizes="(min-width: 800px) 33vw, 100vw"
-                  priority={index < 3 && imageIndex === 0}
-                />
-              ))}
-            </div>
-            <div class="product__info">
-              <h2 class="product__title">{product.title}</h2>
-              <span class="product__price">{product.price}</span>
-            </div>
-            <a class="product__buy" href={product.url} target="_blank" rel="noopener">
-              Buy<span class="sr-only"> {product.title} (opens in a new tab)</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <p class="empty-message">No products yet.</p>
-    )
-  }
+  <MerchReel products={products} />
 </Base>

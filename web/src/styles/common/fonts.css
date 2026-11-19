@@ -1,1 +1,28 @@
 /* @font-face rules for the site's fonts. Font files go in web/public/fonts/. */
+
+@font-face {
+  font-family: 'Magister ST';
+  src: url('/fonts/MagisterST-Medium.woff2') format('woff2'),
+    url('/fonts/MagisterST-Medium.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Magister ST';
+  src: url('/fonts/MagisterST-Bold.woff2') format('woff2'),
+    url('/fonts/MagisterST-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Magister Mono ST';
+  src: url('/fonts/MagisterMonoST-Regular.woff2') format('woff2'),
+    url('/fonts/MagisterMonoST-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}

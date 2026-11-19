@@ -1,0 +1,83 @@
+/* Visual layout for the awards page, including the hover background. */
+
+.awards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--big-gap);
+  padding: 10vh var(--margin) 15vh;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-mono);
+  font-weight: var(--font-weight-mono);
+  line-height: var(--line-height-mono);
+  letter-spacing: var(--letter-spacing-mono);
+}
+
+.award {
+  position: relative;
+  text-align: center;
+}
+
+.award__text {
+  position: relative;
+  z-index: 1;
+  padding-inline: var(--big-gap);
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px
+}
+
+.award__ceremony,
+.award__category,
+.award__work {
+  display: block;
+}
+
+.award__year {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+/* The image is the page background. It stays hidden until the award is hovered or focused. */
+.award__image {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-duration) var(--transition-timing-function);
+}
+
+.award__image img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+}
+
+@media (hover: hover) {
+  .award:hover .award__image,
+  .award:focus-visible .award__image {
+    opacity: 1;
+  }
+}
+
+/* Phone: no room for the side padding. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .award__text {
+    padding-inline: var(--margin);
+  }
+}
+
+/* Touch screens: a tap shows the award's picture, a tap elsewhere hides it. */
+@media (hover: none) {
+  .award:focus .award__image {
+    opacity: 1;
+  }
+
+  .award:focus {
+    outline: none;
+  }
+}

@@ -6,6 +6,12 @@ import EmblaCarousel from 'embla-carousel';
 import { WheelGesturesPlugin } from 'embla-carousel-wheel-gestures';
 import { closeNav, setHeaderProject } from './header.js';
 
+// Embla's duration is a physics constant, not milliseconds: lower is quicker.
+// About 11 is a third of a second for one step.
+const STEP_DURATION = 11;
+// Released flicks glide this much quicker than Embla's default glide.
+const GLIDE_SPEED = 0.5;
+
 let embla;
 let root;
 let frontIndex = -1;
@@ -27,10 +33,19 @@ function stepsAway(index) {
 }
 
 function armScroll(steps) {
-  // Embla's duration is a physics constant, not milliseconds. 15 is about
-  // half a second; a longer jump eases a little longer, then caps.
-  const duration = reducedMotion.matches ? 8 : Math.min(28, 15 + (steps - 1) * 4);
+  // A longer jump eases a little longer, then caps.
+  const duration = reducedMotion.matches ? 8 : Math.min(22, STEP_DURATION + (steps - 1) * 3);
   embla.internalEngine().options.duration = duration;
+}
+
+/**
+ * Free mode keeps the full momentum of a flick, so a big scroll carries on for a while.
+ * It would stop between two pictures, so the end of the glide is moved to the nearest project.
+ */
+function landOnProject(api) {
+  const engine = api.internalEngine();
+  engine.scrollBody.useDuration(engine.scrollBody.duration() * GLIDE_SPEED);
+  engine.scrollTo.distance(0, true);
 }
 
 function scrollToProject(index) {
@@ -308,9 +323,11 @@ export function setUpRoulette() {
     {
       loop: true,
       align: 'center',
+      // Momentum after a flick. Reduced motion keeps the plain step-by-step snap.
+      dragFree: !reducedMotion.matches,
       skipSnaps: true,
       containScroll: false,
-      duration: reducedMotion.matches ? 8 : 15,
+      duration: reducedMotion.matches ? 8 : STEP_DURATION,
     },
     // Vertical wheel and trackpad drive the strip. Drag still scrubs sideways.
     [WheelGesturesPlugin({ forceWheelAxis: 'y' })],
@@ -318,6 +335,7 @@ export function setUpRoulette() {
 
   const paint = () => updateLevels(embla);
 
+  if (!reducedMotion.matches) embla.on('pointerUp', landOnProject);
   embla.on('init', paint);
   embla.on('reInit', paint);
   embla.on('scroll', paint);
@@ -345,6 +363,8 @@ export function setUpRoulette() {
   root.addEventListener('pointerdown', onInteract);
   root.addEventListener('wheel', onInteract, { passive: true });
   paint();
+  // The row stays hidden until Embla has placed the slides, so it never shows unarranged.
+  root.dataset.ready = '';
 }
 
 document.addEventListener('click', onSlideClick, true);

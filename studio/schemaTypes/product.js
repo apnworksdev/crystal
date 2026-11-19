@@ -14,6 +14,14 @@ export const product = defineType({
       validation: (rule) => rule.required(),
     }),
     defineField({
+      name: 'slug',
+      title: 'URL',
+      type: 'slug',
+      description: 'The product page address. Generate it from the title.',
+      options: { source: 'title', maxLength: 96 },
+      validation: (rule) => rule.required(),
+    }),
+    defineField({
       name: 'price',
       type: 'string',
       description: 'Shown exactly as written, including the currency. For example: €35',
@@ -23,7 +31,7 @@ export const product = defineType({
       name: 'url',
       title: 'Shop link',
       type: 'url',
-      description: 'Where visitors buy the product.',
+      description: 'Where visitors buy the product. Shown on the product page.',
       validation: (rule) => rule.required().uri({ scheme: ['http', 'https'] }),
     }),
     defineField({

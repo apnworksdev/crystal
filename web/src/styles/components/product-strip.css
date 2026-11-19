@@ -1,0 +1,121 @@
+/* Product page: a sideways scroll or a drag moves the pictures. A vertical scroll
+   moves the page down to the footer. The current picture sits in the center.
+   Neighbors stay cut off at the sides. */
+
+/* Behaviour: the strip is a sideways scroller. The stage stays put (sticky) while the
+   run behind it gives the scroll its length, and product-strip.js turns the scroll
+   position into the track's movement. Vertical scrolls pass through to the page. */
+.product-strip {
+  display: flex;
+  height: 100dvh;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  cursor: grab;
+}
+
+.product-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.product-strip:active {
+  cursor: grabbing;
+}
+
+/* Behaviour: hidden until the strip script has centred the first picture (product-strip.js sets
+   data-ready), so it does not start at the left and jump. Same as the home roulette.
+   Only when scripts run, so without JavaScript the strip still shows. */
+@media (scripting: enabled) {
+  .product-strip:not([data-ready]) .product-strip__track {
+    visibility: hidden;
+  }
+}
+
+.product-strip__stage {
+  position: sticky;
+  left: 0;
+  flex: none;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.product-strip__run {
+  flex: none;
+  width: calc(var(--reel-steps) * 60vw);
+}
+
+.product-strip__track {
+  display: flex;
+  align-items: center;
+  gap: clamp(3rem, 12vw, 8rem);
+  width: max-content;
+  will-change: transform;
+}
+
+.product-strip__card {
+  margin: 0;
+  flex: none;
+  width: max-content;
+  max-width: min(52vw, 40rem);
+}
+
+.product-strip__card {
+  --card-max-width: min(52vw, 40rem);
+  --card-max-height: 70vh;
+}
+
+.product-strip__card img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: var(--card-max-width);
+  max-height: var(--card-max-height);
+  pointer-events: none;
+}
+
+/* The ratio is known before the file arrives, so the frame already has its size and the
+   row does not shift while it loads. Padding-bottom keeps the shape (older browsers lack
+   aspect-ratio); the picture fills the frame. */
+.product-strip__card[data-ratio] {
+  position: relative;
+  width: min(var(--card-max-width), calc(var(--card-max-height) * var(--ratio)));
+}
+
+.product-strip__card[data-ratio]::before {
+  content: '';
+  display: block;
+  padding-bottom: calc(100% / var(--ratio));
+}
+
+.product-strip__card[data-ratio] img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+@media (max-width: 40rem) {
+  .product-strip__card {
+    --card-max-width: min(78vw, 40rem);
+    --card-max-height: 50vh;
+    max-width: min(78vw, 40rem);
+  }
+}
+
+/* Behaviour: on touch screens product-strip.js moves the strip one picture per sideways
+   swipe. Vertical swipes are left to the browser, so the page still scrolls to the footer. */
+@media (pointer: coarse) {
+  /* iPhone Safari still scrolled the strip sideways itself, on top of the script, so the
+     picture moved twice. Hidden overflow leaves only the script's scrollLeft. */
+  .product-strip {
+    overflow-x: hidden;
+    touch-action: pan-y;
+  }
+}

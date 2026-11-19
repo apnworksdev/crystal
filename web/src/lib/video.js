@@ -73,6 +73,17 @@ export async function toVideo(url, poster) {
     source: 'vimeo',
     // Starts playing, because the visitor already clicked play on the poster.
     playerSrc: vimeoEmbedUrl(video, { autoplay: '1' }),
+    // The project page draws its own controls and starts playback itself.
+    frameSrc: vimeoEmbedUrl(video, {
+      controls: '0',
+      title: '0',
+      byline: '0',
+      portrait: '0',
+      keyboard: '0',
+      transparent: '0',
+      autopause: '0',
+      playsinline: '1',
+    }),
     // Muted, looping and without controls. Needs a paid Vimeo plan.
     loopSrc: vimeoEmbedUrl(video, { background: '1' }),
     poster: poster ?? (await vimeoThumbnail(video.url)),

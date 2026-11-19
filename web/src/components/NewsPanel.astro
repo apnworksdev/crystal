@@ -1,0 +1,91 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import '../styles/components/news.css';
+
+// Opens beside the logo a few seconds after arrival (scripts/news.js). One item shows at a time.
+const { items = [] } = Astro.props;
+// Changing the items shows the panel again to people who closed the old ones.
+const key = stegaClean(items.map((item) => item.title).join('|'));
+const several = items.length > 1;
+---
+
+<section
+  class="news-panel"
+  data-news-panel
+  data-news-key={key}
+  hidden
+  inert
+  aria-labelledby="news-title"
+>
+  <div class="news-panel__head">
+    <h2 class="news-panel__title" id="news-title">News</h2>
+    <button class="news-panel__close" type="button" data-news-close aria-label="Close news">
+      <svg viewBox="0 0 11 11" aria-hidden="true">
+        <path d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z" fill="currentColor"></path>
+      </svg>
+    </button>
+  </div>
+  <div class="news-panel__body">
+    <div class="news-panel__bar">
+      <div class="news-panel__titles" aria-live="polite">
+        {
+          items.map((item, index) => {
+            const Tag = item.link ? 'a' : 'p';
+            return (
+              <Tag
+                class="news-panel__item-title"
+                data-news-item={index}
+                href={item.link ? stegaClean(item.link) : undefined}
+                hidden={index > 0}
+              >
+                {item.title}
+              </Tag>
+            );
+          })
+        }
+      </div>
+      {
+        several && (
+          <div class="news-panel__arrows">
+            <button class="news-panel__arrow" type="button" data-news-step="-1" aria-label="Previous news">
+              <svg viewBox="0 0 8 9" fill="none" aria-hidden="true">
+                <path d="M7.50391 8.2168L0.503906 4.2168L7.50391 0.216797" stroke-width="0.5" stroke="currentColor" />
+              </svg>
+            </button>
+            <button class="news-panel__arrow" type="button" data-news-step="1" aria-label="Next news">
+              <svg viewBox="0 0 8 9" fill="none" aria-hidden="true">
+                <path d="M0.124023 0.216797L7.12402 4.2168L0.124023 8.2168" stroke-width="0.5" stroke="currentColor" />
+              </svg>
+            </button>
+          </div>
+        )
+      }
+    </div>
+    <div class="news-panel__images">
+      {
+        items.map((item, index) => {
+          const Tag = item.link ? 'a' : 'div';
+          return (
+            <Tag
+              class="news-panel__image"
+              data-news-item={index}
+              href={item.link ? stegaClean(item.link) : undefined}
+              tabindex={item.link ? '-1' : undefined}
+              hidden={index > 0}
+            >
+              <img
+                src={item.image.src}
+                srcset={item.image.srcset}
+                sizes="(max-width: 48rem) 90vw, 36rem"
+                width={item.image.width}
+                height={item.image.height}
+                alt={item.image.alt ?? ''}
+                loading="lazy"
+              />
+            </Tag>
+          );
+        })
+      }
+    </div>
+  </div>
+</section>

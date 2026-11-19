@@ -1,0 +1,244 @@
+/* News: a panel beside the logo, centered on the header row. A head bar with
+   the close button, then the current item's title with the arrows, then its
+   picture in a 3:4 frame. It unfolds from the header row like About. */
+
+@property --news {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.news-panel {
+  --news: 0;
+  --news-image-h: min(64dvh, 46rem);
+  transition: --news var(--transition-duration) linear;
+}
+
+.news-panel[hidden] {
+  display: none;
+}
+
+.site-header[data-news] .news-panel {
+  --news: 1;
+}
+
+.site-header[data-news][data-news-closing] .news-panel {
+  --news: 0;
+}
+
+.site-header[data-news] .news-panel:not([hidden]) {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--small-gap);
+  width: calc(var(--news-image-h) * 3 / 4 + var(--inline-gap) * 2);
+  margin-left: var(--small-gap);
+  color: var(--background-color);
+  clip-path: inset(calc((1 - var(--news)) * 50%) 0);
+}
+
+.news-panel ::selection {
+  background: var(--background-color);
+  color: var(--foreground-color);
+}
+
+.news-panel :focus-visible {
+  outline-color: var(--background-color);
+}
+
+.news-panel__head,
+.news-panel__body {
+  background: var(--foreground-color);
+}
+
+.news-panel__head,
+.news-panel__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  height: var(--height-bubble);
+  padding-inline: var(--inline-gap) 0;
+}
+
+.news-panel__title {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
+.news-panel__close,
+.news-panel__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--height-bubble);
+}
+
+.news-panel__close {
+  width: var(--height-bubble);
+}
+
+.news-panel__close svg {
+  width: 11px;
+  height: 11px;
+}
+
+.news-panel__titles {
+  min-width: 0;
+}
+
+.news-panel__item-title {
+  display: block;
+  overflow: hidden;
+  color: inherit;
+  line-height: 1;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.news-panel__item-title[hidden],
+.news-panel__image[hidden] {
+  display: none;
+}
+
+.news-panel__arrows {
+  display: flex;
+  flex: none;
+  padding-right: var(--inline-gap);
+}
+
+.news-panel__arrow {
+  width: 1rem;
+}
+
+.news-panel__arrow svg {
+  width: 8px;
+  height: 9px;
+}
+
+.news-panel__images {
+  padding: 0 var(--inline-gap) var(--inline-gap);
+}
+
+/* 3:4 frame. Padding-bottom keeps the shape (older browsers lack aspect-ratio). */
+.news-panel__image {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.news-panel__image::before {
+  content: '';
+  display: block;
+  padding-bottom: 133.3333%;
+}
+
+.news-panel__image img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The project page header is the player, so news waits until the visitor leaves it. */
+body[data-page='project'] .news-panel {
+  display: none;
+}
+
+/* The archive header is the column bar, so news hangs below it instead of pushing the columns. */
+body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
+  position: absolute;
+  top: calc(100% + var(--small-gap));
+  left: 0;
+  --news-image-h: min(calc(50dvh - var(--height-bubble) * 3 - var(--margin)), 40rem);
+  margin-left: 0;
+  clip-path: inset(0 0 calc((1 - var(--news)) * 100%) 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-panel {
+    transition: none;
+  }
+}
+
+/* Phone: the panel sits beside c and +, as wide as the screen allows, and never
+   taller than it. The title and the arrows go under the picture. Where the
+   header is docked at the bottom or the top, the panel grows away from that edge. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .site-header[data-news] .news-panel:not([hidden]) {
+    --news-w: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
+    --news-image-h: min(
+      calc((var(--news-w) - var(--inline-gap) * 2) * 4 / 3),
+      calc(100dvh - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2 - var(--inline-gap))
+    );
+    order: 1;
+  }
+
+  body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-news] .news-panel:not([hidden]) {
+    align-self: flex-end;
+  }
+
+  body[data-work-view='list']:has([data-work-list]) .site-header[data-news] .news-panel:not([hidden]) {
+    align-self: flex-start;
+  }
+
+  /* Archive: the bar fills the header row, so the panel sits over it, beside c and +,
+     instead of hanging below it. */
+  body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
+    --news-image-h: min(
+      calc((var(--news-w) - var(--inline-gap) * 2) * 4 / 3),
+      calc(100dvh - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2 - var(--inline-gap))
+    );
+    top: 50%;
+    left: calc(var(--height-bubble) * 2 + var(--small-gap) * 2);
+    translate: 0 -50%;
+    clip-path: inset(calc((1 - var(--news)) * 50%) 0);
+  }
+
+  .news-panel__body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .news-panel__bar {
+    order: 1;
+    padding-inline: calc(var(--inline-gap) * 2);
+  }
+
+  .news-panel__arrows {
+    display: contents;
+  }
+
+  .news-panel__arrow[data-news-step='-1'] {
+    order: -1;
+  }
+
+  .news-panel__titles {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .news-panel__item-title {
+    font-size: 12px;
+  }
+
+  .news-panel__images {
+    padding: var(--inline-gap) var(--inline-gap) 0;
+  }
+
+  .site-header[data-about] .news-panel {
+    display: none;
+  }
+
+  /* These share the header row with the panel and would sit on top of it. */
+  .site-header[data-news]:not([data-news-closing]) :is(.site-header__views, .site-header__product-title, .site-header__product) {
+    visibility: hidden;
+  }
+}

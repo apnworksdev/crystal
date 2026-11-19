@@ -27,7 +27,7 @@ const firstStill = rows.find((row) => row.still)?.still;
   rows.length > 0 && (
     <section class="work-list" data-work-list hidden>
       <div class="work-list__layout">
-        <div class="work-list__still">
+        <div class="work-list__still" data-work-still-frame>
           {
             firstStill && (
               <img

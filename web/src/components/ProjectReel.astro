@@ -16,6 +16,8 @@ const cards = projects.map((project) => ({
   still: stillFor(project.thumbnail),
 }));
 const first = cards[0];
+// Known before the file arrives, so each picture holds its size and the reel does not shift.
+const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width / image.height).toFixed(4) : undefined);
 ---
 
 <h1 class="sr-only">Work</h1>
@@ -39,6 +41,8 @@ const first = cards[0];
               data-reel-card
               data-brand={card.brand}
               data-title={card.title}
+              data-ratio={ratio(card.still) ? true : undefined}
+              style={ratio(card.still) ? `--ratio: ${ratio(card.still)}` : undefined}
               tabindex={index === 0 ? 0 : -1}
             >
               {
@@ -47,8 +51,9 @@ const first = cards[0];
                     src={card.still.src}
                     srcset={card.still.srcset}
                     sizes="(min-width: 70rem) 40rem, 52vw"
+                    width={card.still.width}
+                    height={card.still.height}
                     alt=""
-                    transition:name={`project-${card.slug}-media`}
                   />
                 )
               }

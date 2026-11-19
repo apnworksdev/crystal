@@ -1,18 +1,26 @@
 ---
 import { stegaClean } from '@sanity/client/stega';
-import { ClientRouter, fade } from 'astro:transitions';
+import { ClientRouter } from 'astro:transitions';
+import AboutPanel from '../components/AboutPanel.astro';
 import Logo from '../components/icons/Logo.astro';
-import Popup from '../components/Popup.astro';
-import { getSettings, isPreview } from '../lib/content.js';
+import NewsPanel from '../components/NewsPanel.astro';
+import headerFlipSource from '../scripts/header-flip.js?raw';
+import { getAbout, getSettings, isPreview } from '../lib/content.js';
 import '../styles/common/variables.css';
 import '../styles/common/fonts.css';
 import '../styles/common/globals.css';
 import '../styles/common/main.css';
 import '../styles/common/transitions.css';
 import '../styles/components/header.css';
+import '../styles/components/footer.css';
+import '../styles/components/intro.css';
 
-const { title, description } = Astro.props;
-const settings = await getSettings();
+const { title, description, player = false, product = false } = Astro.props;
+const headerFlipClassic = headerFlipSource.replace(
+  /^export /m,
+  '',
+);
+const [settings, about] = await Promise.all([getSettings(), getAbout()]);
 const siteTitle = stegaClean(settings.title);
 const pageTitle = title ? `${stegaClean(title)} · ${siteTitle}` : siteTitle;
 const path = Astro.url.pathname;
@@ -22,15 +30,17 @@ const NAV = [
   ['Awards', '/awards'],
   ['Archive', '/archive'],
   ['Merch', '/merch'],
-  ['About', '/about'],
+  ['About', null],
 ];
 const isCurrent = (href) => path === href || path.startsWith(`${href}/`);
 const onWork = path === '/work' || path === '/work/';
-const currentNav = NAV.find(([, href]) => isCurrent(href));
+const onArchive = path === '/archive' || path === '/archive/';
+const usesMono = player || onWork || onArchive || isCurrent('/awards');
+const pageKind = player ? 'project' : product ? 'product' : onArchive ? 'archive' : undefined;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" class:list={[isPreview && 'is-preview']}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -38,41 +48,177 @@ const currentNav = NAV.find(([, href]) => isCurrent(href));
     <meta name="description" content={stegaClean(description ?? settings.description)} />
     {isPreview && <meta name="robots" content="noindex" />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/fonts/MagisterST-Bold.woff2" as="font" type="font/woff2" crossorigin />
+    {/* Mono is only used by the player, credits, archive, awards and the work list. */}
+    {usesMono && <link rel="preload" href="/fonts/MagisterMonoST-Regular.woff2" as="font" type="font/woff2" crossorigin />}
     {!settings.isPlaceholder && <link rel="preconnect" href="https://cdn.sanity.io" />}
     {/* Click-to-edit needs a stable page, so preview uses normal page loads. */}
     {!isPreview && <ClientRouter />}
+    {/* Decides the intro before first paint. A module would run too late. */}
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        if (root.dataset.introState) return;
+
+        var reduce = false;
+        try {
+          reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        } catch (e) {}
+
+        var replay = false;
+        try {
+          replay = new URLSearchParams(window.location.search).has('intro');
+        } catch (e) {}
+
+        var seen = false;
+        try {
+          seen = window.sessionStorage.getItem('intro-seen') === '1';
+        } catch (e) {}
+
+        var play = !reduce && (replay || !seen);
+        try {
+          window.sessionStorage.setItem('intro-seen', '1');
+        } catch (e) {}
+
+        root.dataset.introState = play ? 'play' : 'done';
+        if (!play) return;
+
+        root.classList.add('intro-play');
+        root.setAttribute('aria-busy', 'true');
+
+        function blockKeys(event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        document.addEventListener('keydown', blockKeys, true);
+        document.addEventListener('keyup', blockKeys, true);
+
+        var timer = window.setTimeout(function () {
+          root.classList.remove('intro-play', 'intro-landed', 'intro-header', 'intro-page');
+          release();
+        }, 6000);
+
+        function release() {
+          window.clearTimeout(timer);
+          document.removeEventListener('keydown', blockKeys, true);
+          document.removeEventListener('keyup', blockKeys, true);
+          root.removeAttribute('aria-busy');
+          window.__introRelease = null;
+        }
+
+        window.__introRelease = release;
+      })();
+    </script>
   </head>
-  <body>
+  <body data-page={pageKind}>
+    <div class="intro" data-intro aria-hidden="true">
+      <div class="intro__plate" data-intro-plate>
+        <Logo />
+      </div>
+    </div>
     <header class="site-header" transition:persist="site-header" transition:animate="none">
       <a class="site-header__logo" href="/">
         <Logo />
         <span class="sr-only">{settings.title}</span>
       </a>
-      <div class="site-header__context">
-        {
-          currentNav && (
-            <a class="site-header__link" href={currentNav[1]} aria-current="page">
-              {currentNav[0]}
-            </a>
-          )
-        }
-        <a class="site-header__project" data-header-project hidden></a>
-        <div class="site-header__views" data-work-views hidden={!onWork}>
-          <button class="site-header__view" type="button" data-view="list" aria-pressed="false">
-            List
-          </button>
-          <button class="site-header__view" type="button" data-view="reel" aria-pressed="true">
-            Reel
-          </button>
+      {settings.news && <NewsPanel items={settings.news} />}
+      <div class="site-header__player" data-header-player>
+        <div class="site-header__name" data-player-name>
+          <div class="site-header__name-head">
+            <h1 class="site-header__name-title">
+              <button
+                class="site-header__name-text"
+                type="button"
+                data-player-title
+                hidden
+                aria-expanded="false"
+                aria-controls="project-info"
+              ></button>
+              <span class="site-header__name-text" data-player-label hidden></span>
+            </h1>
+            <button
+              class="site-header__info-close"
+              type="button"
+              data-player-info-close
+              hidden
+              aria-label="Close details"
+            >
+              <svg viewBox="0 0 11 11" aria-hidden="true">
+                <path
+                  d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z"
+                  fill="currentColor"
+                ></path>
+              </svg>
+            </button>
+          </div>
+          <div class="site-header__info" id="project-info" data-player-info hidden></div>
         </div>
+        <!-- Reserved. The action comes later. -->
+        <button class="site-header__slot" type="button" tabindex="-1" aria-hidden="true"><span class="site-header__slot-icon">»«</span></button>
+        <label class="site-header__seek">
+          <span class="sr-only">Seek</span>
+          <canvas class="site-header__wave" data-player-wave aria-hidden="true"></canvas>
+          <input type="range" data-player-seek min="0" max="1000" value="0" step="1" />
+        </label>
+        <span class="site-header__time" data-player-time>00:00/00:00</span>
+        <button class="site-header__close" type="button" data-player-close aria-label="Close">
+          <svg viewBox="0 0 11 11" aria-hidden="true">
+            <path d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z" fill="currentColor"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="site-header__context">
+        <a class="site-header__project" data-header-project hidden></a>
       </div>
       <nav class="site-header__nav" id="site-nav" aria-label="Main">
         <div class="site-header__links">
-          {NAV.filter(([, href]) => !isCurrent(href)).map(([label, href]) => (
-            <a class="site-header__link" href={href}>
-              {label}
-            </a>
-          ))}
+          {NAV.map(([label, href]) => {
+            const item = href ? (
+              <a class="site-header__link" href={href} aria-current={isCurrent(href) ? 'page' : undefined}>
+                {label}
+              </a>
+            ) : (
+              <button
+                class="site-header__link"
+                type="button"
+                data-about-open
+                aria-expanded="false"
+                aria-controls="about-panel"
+              >
+                {label}
+              </button>
+            );
+            if (href === '/work') {
+              return (
+                <div class="site-header__work">
+                  {item}
+                  <div class="site-header__views" data-work-views hidden={!onWork}>
+                    <button class="site-header__view" type="button" data-view="list" aria-pressed="false">
+                      List
+                    </button>
+                    <button class="site-header__view" type="button" data-view="reel" aria-pressed="true">
+                      Reel
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            if (href === '/merch') {
+              return (
+                <div class="site-header__merch">
+                  {item}
+                  <h1 class="site-header__product-title" data-product-title hidden></h1>
+                  <div class="site-header__product" data-product-buy hidden>
+                    <span class="site-header__price" data-product-price></span>
+                    <a class="site-header__buy" data-product-link href="#" target="_blank" rel="noopener">
+                      Buy<span class="sr-only" data-product-buy-label></span>
+                    </a>
+                  </div>
+                </div>
+              );
+            }
+            return item;
+          })}
         </div>
       </nav>
       <button
@@ -82,28 +228,113 @@ const currentNav = NAV.find(([, href]) => isCurrent(href));
         aria-controls="site-nav"
         aria-label="Open menu"
       >
-        <span aria-hidden="true" data-header-mark>+</span>
+        <span aria-hidden="true" data-header-mark>
+          <svg data-header-plus viewBox="0 0 15 15" aria-hidden="true">
+            <path d="M7.75098 7.25H15.001L15 7.75H7.75098V15H7.25098V7.75H0L0.000976562 7.25H7.25098V0H7.75098V7.25Z" fill="#D9D9D9"></path>
+          </svg>
+          <svg data-header-minus viewBox="0 0 15 15" hidden aria-hidden="true">
+            <path d="M0.000976562 7.25H15.001L15 7.75H0Z" fill="#D9D9D9"></path>
+          </svg>
+        </span>
       </button>
+      <div class="site-header__columns" data-archive-columns>
+        <span>Index</span>
+        <span>Project Title</span>
+        <span>Brand</span>
+        <span>Year</span>
+        <span>Time</span>
+      </div>
+      <AboutPanel about={about} email={settings.email} />
     </header>
+    <script is:inline set:html={headerFlipClassic}></script>
+    <script is:inline>
+      /* Holds the header where it was, before paint, so a full page load can slide it. */
+      (function () {
+        try {
+          if (location.pathname === '/work' || location.pathname === '/work/') {
+            var listMode = sessionStorage.getItem('work-view') === 'list';
+            if (listMode) document.body.dataset.workView = 'list';
+            var viewButtons = document.querySelectorAll('[data-view]');
+            for (var i = 0; i < viewButtons.length; i++) {
+              viewButtons[i].setAttribute(
+                'aria-pressed',
+                viewButtons[i].getAttribute('data-view') === (listMode ? 'list' : 'reel') ? 'true' : 'false',
+              );
+            }
+          }
+          if (document.readyState === 'complete') return;
+          if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            sessionStorage.removeItem('crystal-header-from');
+            return;
+          }
+          var raw = sessionStorage.getItem('crystal-header-from');
+          if (raw) {
+            sessionStorage.removeItem('crystal-header-from');
+            var from = JSON.parse(raw);
+            var header = document.querySelector('.site-header');
+            if (header && !header.dataset.flipTop) {
+              var to = header.getBoundingClientRect();
+              var flip = headerFlip(from, to, document.body.dataset.page === 'project');
+              if (flip) {
+                header.dataset.flipTop = String(from.top);
+                header.dataset.flipLeft = String(from.left);
+                header.dataset.flipWidth = String(from.width);
+                header.dataset.flipToTop = String(to.top);
+                header.dataset.flipToLeft = String(to.left);
+                header.dataset.flipToWidth = String(to.width);
+                header.style.transformOrigin = 'left center';
+                header.style.transform = flip.start;
+              }
+            }
+          }
+          if (sessionStorage.getItem('crystal-cover-leave')) {
+            var cover = document.createElement('div');
+            cover.className = 'project-cover';
+            cover.setAttribute('data-cover-hold', '');
+            cover.setAttribute('aria-hidden', 'true');
+            cover.style.top = '0';
+            cover.style.left = '0';
+            cover.style.width = '100vw';
+            cover.style.height = '100vh';
+            document.body.appendChild(cover);
+          }
+          /* Player stays hidden until is-arriving fades it in, so it does not flash open. */
+          if (sessionStorage.getItem('crystal-cover-enter') && document.body.dataset.page === 'project') {
+            var arriving = document.querySelector('.site-header');
+            if (arriving) arriving.classList.add('is-arriving');
+          }
+        } catch (error) {
+          /* Storage or layout can fail. The page still opens. */
+        }
+      })();
+    </script>
 
-    <main transition:animate={fade({ duration: '0.25s' })}>
+    <div class="site-scroll" data-archive-scroll>
+    <main>
       <slot />
     </main>
 
-    <footer class="site-footer" transition:name="site-footer" transition:animate="none">
-      {settings.email && (
-        <a class="site-footer__link" href={`mailto:${stegaClean(settings.email)}`}>
-          {settings.email}
-        </a>
-      )}
+    <footer class="site-footer">
+      <a class="site-footer__link" href="/privacy">Privacy Policy</a>
+      <a class="site-footer__link" href="/cookies">Cookies Policy</a>
+      <p class="site-footer__label">Contact</p>
+      {
+        settings.email && (
+          <form class="site-footer__form" action={`mailto:${stegaClean(settings.email)}`}>
+            <label class="sr-only" for="footer-email">Email</label>
+            <input id="footer-email" type="email" name="email" value={stegaClean(settings.email)} />
+            <span class="site-footer__rule" aria-hidden="true"></span>
+            <button type="submit">Submit</button>
+          </form>
+        )
+      }
       {settings.links?.map((link) => (
         <a class="site-footer__link" href={link.url} rel="me noopener">
           {link.label}
         </a>
       ))}
     </footer>
-
-    {settings.popup && <Popup popup={settings.popup} />}
+    </div>
 
     <script>
       import '../scripts/page.js';

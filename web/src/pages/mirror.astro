@@ -1,0 +1,83 @@
+---
+// Hidden page. Opens after three quick clicks on the header logo.
+// Shows the camera through a shader that the microphone moves.
+// It has no site header and no page router, so leaving it always does a full
+// page load and the camera is released.
+import { stegaClean } from '@sanity/client/stega';
+import Logo from '../components/icons/Logo.astro';
+import { getSettings } from '../lib/content.js';
+import '../styles/common/variables.css';
+import '../styles/common/fonts.css';
+import '../styles/common/globals.css';
+import '../styles/pages/mirror.css';
+
+const settings = await getSettings();
+const siteTitle = stegaClean(settings.title);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{`Mirror · ${siteTitle}`}</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/fonts/MagisterST-Bold.woff2" as="font" type="font/woff2" crossorigin />
+  </head>
+  <body>
+    <div class="mirror" data-mirror data-state="idle">
+      <canvas class="mirror__canvas" data-mirror-canvas aria-hidden="true"></canvas>
+      <video class="mirror__video" data-mirror-video muted playsinline aria-hidden="true"></video>
+
+      <h1 class="mirror__logo">
+        <Logo />
+        <span class="sr-only">{siteTitle} mirror</span>
+      </h1>
+
+      <div class="mirror__bar">
+        <button class="mirror__enter" type="button" data-mirror-enter>Enter the mirror mode</button>
+
+        <button
+          class="mirror__toggle"
+          type="button"
+          data-mirror-toggle="audio"
+          aria-pressed="false"
+          aria-label="Microphone"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M6 2.5a2 2 0 0 1 4 0V8a2 2 0 0 1-4 0Z M3.5 7.5a4.5 4.5 0 0 0 9 0 M8 12v2.5 M6 14.5h4" />
+            <path class="mirror__slash" d="M2.5 14 13.5 2" />
+          </svg>
+        </button>
+
+        <button
+          class="mirror__toggle"
+          type="button"
+          data-mirror-toggle="video"
+          aria-pressed="false"
+          aria-label="Camera"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M1.5 4.5h9v7h-9Z M10.5 7l4-2.5v7l-4-2.5" />
+            <path class="mirror__slash" d="M2.5 14 13.5 2" />
+          </svg>
+        </button>
+
+        <button class="mirror__close" type="button" data-mirror-close aria-label="Close">
+          <svg viewBox="0 0 11 11" aria-hidden="true">
+            <path
+              d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z"
+              fill="currentColor"></path>
+          </svg>
+        </button>
+      </div>
+
+      <p class="sr-only" role="status" data-mirror-status></p>
+    </div>
+
+    <script>
+      import '../scripts/mirror.js';
+    </script>
+  </body>
+</html>

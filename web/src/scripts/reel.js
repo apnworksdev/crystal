@@ -1,12 +1,14 @@
 // Work reel. The picture in front is sharp. The next one sits behind it,
-// a little blurred. Scrolling fades the front one, blurs it and lifts it,
-// and the next one comes forward. The words leave as soon as scrolling
+// a little blurred. Scrolling fades the front one, blurs it and grows it
+// a little in place, and the next one comes forward. The words leave as soon as scrolling
 // starts and return when a picture has settled. The sequence loops.
 
 import { closeNav } from './header.js';
 
 const NEXT_BLUR = 8;
 const NEXT_SCALE = 1.07;
+// How much bigger the leaving picture gets by the time it has gone.
+const LEAVE_SCALE = 1.08;
 
 let root;
 let wordsFor = -1;
@@ -19,6 +21,11 @@ let dragged = false;
 let step = 1;
 let cycle = 1;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+// A swipe moves one picture at most. Past this share of a step, or this fast (px per ms),
+// it goes on to the next one; otherwise it springs back.
+const SWIPE_SHARE = 0.12;
+const SWIPE_SPEED = 0.3;
+let touch = null;
 
 function cards() {
   return [...root.querySelectorAll('[data-reel-card]')];
@@ -59,13 +66,13 @@ function place(card, { opacity, blur, scale, shift, z, active }) {
 
 function slotStyle(slot, local) {
   if (slot === 0) {
-    // Fade and blur lag behind the lift, so the picture is still readable once it has risen.
+    // It stays in place: fades, blurs and grows a little as it goes.
     const leave = local * local;
     return {
       opacity: 1 - leave,
       blur: leave * 10,
-      scale: 1,
-      shift: reducedMotion.matches ? 0 : -local * 44,
+      scale: reducedMotion.matches ? 1 : 1 + (LEAVE_SCALE - 1) * local,
+      shift: 0,
       z: 3,
     };
   }
@@ -227,7 +234,7 @@ function onScroll() {
 }
 
 function onScrollEnd() {
-  if (settling || wrapping) return;
+  if (settling || wrapping || touch) return;
   settle();
 }
 
@@ -255,6 +262,44 @@ function onPointerDown() {
 function onPointerUp() {
   if (!root?.isConnected || root.hidden || dragged || settling) return;
   settle();
+}
+
+// Touch screens: the reel has touch-action: none, so the finger moves it here instead of
+// native momentum scrolling, which ran through several pictures per flick.
+function onTouchDown(event) {
+  if (event.pointerType !== 'touch' || !event.isPrimary) return;
+  cancelSettle();
+  touch = { id: event.pointerId, y: event.clientY, top: root.scrollTop, offset: 0, lastY: event.clientY, lastT: event.timeStamp, speed: 0 };
+}
+
+function onTouchMove(event) {
+  if (!touch || event.pointerId !== touch.id) return;
+  const offset = Math.max(-step, Math.min(step, touch.y - event.clientY));
+  const dt = event.timeStamp - touch.lastT;
+  if (dt > 0) touch.speed = (touch.lastY - event.clientY) / dt;
+  touch.lastY = event.clientY;
+  touch.lastT = event.timeStamp;
+  // scrollTop can be wrapped by a whole copy between moves, so move by the change only.
+  root.scrollTop += offset - touch.offset;
+  touch.offset = offset;
+}
+
+function onTouchUp(event) {
+  if (!touch || event.pointerId !== touch.id) return;
+  const { offset, speed } = touch;
+  const stale = event.timeStamp - touch.lastT > 120;
+  touch = null;
+  if (event.type === 'pointercancel') {
+    settle();
+    return;
+  }
+  const fling = stale ? 0 : speed;
+  let goal = 0;
+  if (offset > step * SWIPE_SHARE || fling > SWIPE_SPEED) goal = step;
+  else if (offset < -step * SWIPE_SHARE || fling < -SWIPE_SPEED) goal = -step;
+  // A tap leaves the reel where it is, so the card's own click opens the project.
+  if (Math.abs(offset) < 1 && !goal) return;
+  animateTo(root.scrollTop - offset + goal);
 }
 
 function onKeyDown(event) {
@@ -287,6 +332,11 @@ function unbind(reel) {
   reel.removeEventListener('scrollend', onScrollEnd);
   reel.removeEventListener('wheel', onWheel);
   reel.removeEventListener('pointerdown', onPointerDown);
+  reel.removeEventListener('pointerdown', onTouchDown);
+  reel.removeEventListener('pointermove', onTouchMove);
+  reel.removeEventListener('pointerup', onTouchUp);
+  reel.removeEventListener('pointercancel', onTouchUp);
+  touch = null;
 }
 
 export function setUpReel() {
@@ -313,6 +363,10 @@ export function setUpReel() {
   root.addEventListener('scrollend', onScrollEnd);
   root.addEventListener('wheel', onWheel, { passive: true });
   root.addEventListener('pointerdown', onPointerDown);
+  root.addEventListener('pointerdown', onTouchDown);
+  root.addEventListener('pointermove', onTouchMove, { passive: true });
+  root.addEventListener('pointerup', onTouchUp);
+  root.addEventListener('pointercancel', onTouchUp);
   paint();
 }
 

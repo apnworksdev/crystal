@@ -1,0 +1,52 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import '../styles/components/product-strip.css';
+
+const { product } = Astro.props;
+const title = stegaClean(product.title) ?? '';
+const images = product.images ?? [];
+const copies = images.length > 0 ? [0, 1, 2] : [];
+// Known before the file arrives, so each picture holds its size and the strip does not shift.
+const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width / image.height).toFixed(4) : undefined);
+---
+
+{
+  images.length > 0 ? (
+    <section
+      class="product-strip"
+      data-product-strip
+      aria-label={title}
+      style={`--reel-steps: ${Math.max(images.length - 1, 0)}; --strip-count: ${images.length}`}
+    >
+      <div class="product-strip__stage">
+        <div class="product-strip__track" data-product-track>
+          {copies.map((copy) =>
+            images.map((image, index) => (
+              <figure
+                class="product-strip__card"
+                data-product-card
+                data-copy={copy}
+                data-index={index}
+                data-ratio={ratio(image) ? true : undefined}
+                style={ratio(image) ? `--ratio: ${ratio(image)}` : undefined}
+              >
+                <img
+                  src={image.src}
+                  srcset={image.srcset}
+                  sizes="(min-width: 70rem) 40rem, 52vw"
+                  width={image.width}
+                  height={image.height}
+                  alt=""
+                  fetchpriority={copy === 1 && index === 0 ? 'high' : undefined}
+                />
+              </figure>
+            )),
+          )}
+        </div>
+      </div>
+      <div class="product-strip__run" aria-hidden="true" />
+    </section>
+  ) : (
+    <p class="empty-message">No pictures yet.</p>
+  )
+}

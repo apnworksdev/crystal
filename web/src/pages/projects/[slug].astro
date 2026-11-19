@@ -1,47 +1,105 @@
 ---
-import Media from '../../components/Media.astro';
+import { stegaClean } from '@sanity/client/stega';
 import Base from '../../layouts/Base.astro';
-import { getProjects } from '../../lib/content.js';
-import { formatCategories, richTextToHtml } from '../../lib/format.js';
+import { getPageProjects } from '../../lib/content.js';
+import { richTextToHtml } from '../../lib/format.js';
+import '../../styles/pages/project.css';
 
 export async function getStaticPaths() {
-  const projects = await getProjects();
-  return projects.map(({ slug }) => ({ params: { slug } }));
+  return (await getPageProjects()).map(({ slug }) => ({ params: { slug } }));
 }
 
 // Looked up by slug because preview mode renders on the server, without getStaticPaths.
-const project = (await getProjects()).find(({ slug }) => slug === Astro.params.slug);
+const project = (await getPageProjects()).find(({ slug }) => slug === Astro.params.slug);
 if (!project) return Astro.rewrite('/404');
 
-const meta = [project.brand, project.year, formatCategories(project.categories)].filter(Boolean);
 const description = richTextToHtml(project.description);
 const credits = richTextToHtml(project.credits);
+const hasInfo = Boolean(description || credits);
+const media = project.mainMedia;
+const kind = media?.kind === 'video' || media?.kind === 'image' ? media.kind : 'empty';
+const poster = kind === 'image' ? media : media?.poster;
 ---
 
-<Base title={project.title}>
-  <article class="project">
-    <header class="project__header">
-      <h1 class="project__title" transition:name={`project-${project.slug}-title`}>
-        {project.title}
-      </h1>
-      {meta.length > 0 && <p class="project__meta">{meta.join(' · ')}</p>}
-    </header>
+<Base title={project.title} player>
+  <article
+    class="project"
+    data-project
+    data-kind={kind}
+    data-has-info={hasInfo ? '' : undefined}
+  >
+    <span class="project__source" data-project-title hidden>{project.title}</span>
 
-    <div
-      class="project__media"
-      data-kind={project.mainMedia?.kind}
-      transition:name={`project-${project.slug}-media`}
-    >
-      <Media media={project.mainMedia} mode="player" priority />
+    <div class="project__media" data-kind={kind}>
+      {
+        /* The player is mounted after the black cover. The poster only appears if autoplay is blocked. */
+        kind === 'video' && poster && (
+          <img
+            class="project__poster"
+            data-project-poster
+            src={poster.src}
+            srcset={poster.srcset}
+            sizes="100vw"
+            width={poster.width}
+            height={poster.height}
+            alt=""
+            decoding="async"
+            hidden
+          />
+        )
+      }
+      {
+        kind === 'image' && poster && (
+          <img
+            class="project__poster"
+            src={poster.src}
+            srcset={poster.srcset}
+            sizes="100vw"
+            width={poster.width}
+            height={poster.height}
+            alt=""
+            fetchpriority="high"
+            decoding="async"
+            style={poster.lqip ? `background: url(${poster.lqip}) center / cover` : undefined}
+          />
+        )
+      }
+      {
+        kind === 'video' && media.source === 'file' && (
+          <video class="project__frame" data-project-file data-src={media.src} playsinline preload="none" />
+        )
+      }
+      {
+        kind === 'video' && media.source === 'vimeo' && (
+          <iframe
+            class="project__frame"
+            data-project-vimeo
+            data-src={media.frameSrc}
+            title={stegaClean(project.title)}
+            allow="autoplay; fullscreen; picture-in-picture"
+            tabindex="-1"
+          />
+        )
+      }
+      <div class="project__hit" data-project-hit></div>
     </div>
 
     {
-      (description || credits) && (
-        <div class="project__body">
+      hasInfo && (
+        <div class="project__info-source" data-project-info hidden>
           {description && <div class="project__description rich-text" set:html={description} />}
           {credits && <div class="project__credits rich-text" set:html={credits} />}
         </div>
       )
     }
+
+    <div class="project__cursor" data-project-cursor hidden aria-hidden="true">
+      <svg data-icon="play" viewBox="0 0 12 12" aria-hidden="true">
+        <path d="M2.2 1.1v9.8L10.6 6z" fill="currentColor"></path>
+      </svg>
+      <svg data-icon="pause" viewBox="0 0 12 12" hidden aria-hidden="true">
+        <path d="M1.8 1h3v10h-3zm5.4 0h3v10h-3z" fill="currentColor"></path>
+      </svg>
+    </div>
   </article>
 </Base>

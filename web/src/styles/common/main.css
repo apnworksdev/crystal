@@ -12,3 +12,9 @@ body {
 main {
   flex: 1 0 auto;
 }
+
+/* On the archive the list and the footer share this scroller. Everywhere else
+   the wrapper disappears so the body flex stays as it was. */
+.site-scroll {
+  display: contents;
+}

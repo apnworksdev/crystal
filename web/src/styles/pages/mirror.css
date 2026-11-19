@@ -1,0 +1,128 @@
+/* Mirror page: camera through a shader, logo on top, controls at the bottom. */
+
+.mirror {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--background-color);
+  color: var(--foreground-color);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight);
+  line-height: var(--line-height);
+}
+
+.mirror__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 1.4s var(--transition-timing-function);
+}
+
+.mirror[data-camera='on'] .mirror__canvas {
+  opacity: 1;
+}
+
+.mirror__video {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mirror__logo {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.mirror__logo svg {
+  width: min(70vw, 1600px);
+  height: auto;
+}
+
+.mirror__bar {
+  position: absolute;
+  left: 50%;
+  bottom: var(--margin);
+  display: flex;
+  gap: var(--small-gap);
+  transform: translateX(-50%);
+  animation: mirror-bar-in 0.5s var(--transition-timing-function) 0.15s both;
+}
+
+/* The logo arrives already in place (mirror-trigger.js grows it there), then the buttons come in. */
+@keyframes mirror-bar-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mirror__bar {
+    animation: none;
+  }
+}
+
+.mirror__enter,
+.mirror__toggle,
+.mirror__close {
+  display: grid;
+  place-items: center;
+  height: var(--height-bubble);
+  border: 0;
+  background: var(--foreground-color);
+  color: var(--background-color);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mirror__enter {
+  padding-inline: var(--gap);
+}
+
+.mirror__enter[hidden] {
+  display: none;
+}
+
+.mirror__toggle,
+.mirror__close {
+  width: var(--height-bubble);
+}
+
+.mirror__toggle[aria-pressed='false'] {
+  background: var(--background-color);
+  color: var(--foreground-color);
+  box-shadow: inset 0 0 0 1px var(--foreground-color);
+}
+
+.mirror__toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.mirror__toggle[aria-pressed='true'] .mirror__slash {
+  display: none;
+}
+
+.mirror__close svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* While the browser asks for access. Close stays usable. */
+.mirror[data-busy] :is(.mirror__enter, .mirror__toggle) {
+  opacity: 0.6;
+  pointer-events: none;
+}
+

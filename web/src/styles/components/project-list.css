@@ -12,6 +12,10 @@
   display: none;
 }
 
+body[data-work-view='list'] .work-list[hidden] {
+  display: block;
+}
+
 .work-list__layout {
   display: grid;
   grid-template-columns: minmax(36rem, 1fr) auto;
@@ -148,6 +152,18 @@
   gap: var(--small-gap);
 }
 
+/* Same wipe as the nav: the buttons are full size and the stack reveals downward. */
+.work-list__filters[data-open] .work-list__panel,
+.work-list__filters[data-closing] .work-list__panel {
+  --bubble: 0;
+  clip-path: inset(0 0 calc(100% * (1 - var(--bubble))) 0);
+  transition: --bubble 0.18s linear;
+}
+
+.work-list__filters[data-open]:not([data-closing]) .work-list__panel {
+  --bubble: 1;
+}
+
 .work-list__panel[hidden],
 .work-list__filter[hidden] {
   display: none;
@@ -178,5 +194,44 @@
 
   .work-list__layout {
     overflow-x: auto;
+  }
+}
+
+/* Phone: the header is docked at the top. The still runs full width under it,
+   then the table with only the title and the brand. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .work-list {
+    padding: calc(var(--margin) + var(--height-bubble) + var(--small-gap)) var(--margin) var(--big-gap);
+  }
+
+  .work-list__layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow: visible;
+  }
+
+  .work-list__still {
+    height: auto;
+    aspect-ratio: 16 / 7;
+    margin-bottom: var(--small-gap);
+  }
+
+  .work-list__head,
+  .work-list__row {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .work-list__head > :is(:nth-child(1), :nth-child(4), :nth-child(5)),
+  .work-list__row > :is(:nth-child(1), :nth-child(4), :nth-child(5)) {
+    display: none;
+  }
+
+  .work-list__head > :nth-child(3),
+  .work-list__row > :nth-child(3) {
+    text-align: right;
+  }
+
+  .work-list__filters {
+    display: none;
   }
 }

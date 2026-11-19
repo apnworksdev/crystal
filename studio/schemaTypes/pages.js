@@ -104,31 +104,43 @@ export const siteSettings = defineType({
       ],
     }),
     defineField({
-      name: 'popup',
+      name: 'news',
       type: 'object',
-      description: 'Shown once per visit, on whichever page a visitor arrives at.',
+      description:
+        'Opens beside the logo a few seconds after a visitor arrives. Once closed, it stays closed until the site is opened in a new tab.',
       fields: [
         defineField({
           name: 'enabled',
-          title: 'Show the popup',
+          title: 'Show news',
           type: 'boolean',
           initialValue: false,
         }),
         defineField({
-          name: 'title',
-          type: 'string',
+          name: 'items',
+          type: 'array',
+          description: 'Shown in this order. Arrows appear when there is more than one.',
           hidden: ({ parent }) => !parent?.enabled,
           validation: (rule) =>
             rule.custom((value, { parent }) =>
-              parent?.enabled && !value ? 'Add a title, or turn the popup off.' : true,
+              parent?.enabled && !value?.length ? 'Add an item, or turn news off.' : true,
             ),
-        }),
-        imageField({ name: 'image', hidden: ({ parent }) => !parent?.enabled }),
-        defineField({
-          name: 'link',
-          type: 'url',
-          hidden: ({ parent }) => !parent?.enabled,
-          validation: (rule) => rule.uri({ scheme: ['http', 'https'], allowRelative: true }),
+          of: [
+            defineArrayMember({
+              type: 'object',
+              name: 'newsItem',
+              fields: [
+                defineField({ name: 'title', type: 'string', validation: (rule) => rule.required() }),
+                imageField({ name: 'image', validation: (rule) => rule.required() }),
+                defineField({
+                  name: 'link',
+                  type: 'url',
+                  description: 'Optional. Opens when the title or picture is clicked.',
+                  validation: (rule) => rule.uri({ scheme: ['http', 'https'], allowRelative: true }),
+                }),
+              ],
+              preview: { select: { title: 'title', media: 'image' } },
+            }),
+          ],
         }),
       ],
     }),

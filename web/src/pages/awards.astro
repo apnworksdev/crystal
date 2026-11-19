@@ -2,6 +2,7 @@
 import Media from '../components/Media.astro';
 import Base from '../layouts/Base.astro';
 import { getAwards } from '../lib/content.js';
+import '../styles/pages/awards.css';
 
 const awards = await getAwards();
 ---
@@ -12,7 +13,7 @@ const awards = await getAwards();
     awards.length > 0 ? (
       <ul class="awards">
         {awards.map((award) => (
-          <li class="award">
+          <li class="award" tabindex="0">
             <p class="award__text">
               <span class="award__ceremony">{award.ceremony}</span>
               <span class="award__category">{award.category}</span>
@@ -20,7 +21,7 @@ const awards = await getAwards();
             </p>
             {award.image && (
               <div class="award__image">
-                <Media media={award.image} sizes="320px" />
+                <Media media={award.image} sizes="100vw" />
               </div>
             )}
             <span class="award__year">{award.year}</span>

@@ -9,7 +9,7 @@
   --selection-background-color: var(--foreground-color);
   --selection-foreground-color: var(--background-color);
 
-  --font-family: serif;
+  --font-family: 'Magister ST', serif;
   --font-size: 16px;
   --font-weight: 700;
   --line-height: 114.99999999999999%;
@@ -18,8 +18,10 @@
   --line-height-huge: 90%;
   --letter-spacing-huge: -4%;
 
+  --font-weight-medium: 600;
 
-  --font-family-mono: monospace;
+
+  --font-family-mono: 'Magister Mono ST', monospace;
   --font-size-mono: 10px;
   --font-weight-mono: 400;
   --line-height-mono: 110.00000000000001%;

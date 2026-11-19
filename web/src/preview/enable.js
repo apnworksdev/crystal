@@ -1,7 +1,6 @@
 import { createClient } from '@sanity/client';
 import { validatePreviewUrl } from '@sanity/preview-url-secret';
-import { SANITY_DATASET, SANITY_PROJECT_ID } from 'astro:env/server';
-import { getSecret } from 'astro:env/server';
+import { getSecret, SANITY_DATASET, SANITY_PROJECT_ID } from 'astro:env/server';
 import { createSessionValue, SESSION_COOKIE } from './session.js';
 
 export const prerender = false;

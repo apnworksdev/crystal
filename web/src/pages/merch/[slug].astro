@@ -1,0 +1,23 @@
+---
+import { stegaClean } from '@sanity/client/stega';
+import ProductStrip from '../../components/ProductStrip.astro';
+import Base from '../../layouts/Base.astro';
+import { getProduct, getProducts } from '../../lib/content.js';
+
+export async function getStaticPaths() {
+  return (await getProducts()).map(({ slug }) => ({ params: { slug } }));
+}
+
+// Looked up by slug because preview mode renders on the server, without getStaticPaths.
+const product = await getProduct(Astro.params.slug);
+if (!product) return Astro.rewrite('/404');
+
+const title = stegaClean(product.title);
+const price = stegaClean(product.price);
+const url = stegaClean(product.url);
+---
+
+<Base title={title} product>
+  <span data-product-source hidden data-title={title} data-price={price} data-url={url}></span>
+  <ProductStrip product={product} />
+</Base>

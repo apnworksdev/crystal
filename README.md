@@ -40,6 +40,7 @@ Then start what you need:
 | `npm run dev:all` | Studio and public site | Working on design and page transitions |
 | `npm run dev` | Public site | Front-end work only |
 | `npm run studio` | Studio | Content only |
+| `npm test` | Unit tests for the site and the Studio | Checking logic after a change |
 
 The preview shows drafts but has no page transitions, and only opens from the Studio. The public site shows
 published content with transitions. Press Ctrl+C once to stop both servers.

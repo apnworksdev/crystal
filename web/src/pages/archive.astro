@@ -1,29 +1,26 @@
 ---
 import Base from '../layouts/Base.astro';
 import { getArchiveProjects } from '../lib/content.js';
-import { formatCategories } from '../lib/format.js';
+import '../styles/pages/archive.css';
 
 const projects = await getArchiveProjects();
 ---
 
 <Base title="Archive">
-  <h1 class="page-title">Archive</h1>
+  <h1 class="sr-only">Archive</h1>
   {
     projects.length > 0 ? (
-      <ul class="archive">
-        {projects.map((project) => (
+      <ol class="archive">
+        {projects.map((project, index) => (
           <li class="archive__item">
-            <a class="archive__link" href={`/projects/${project.slug}`}>
-              <span class="archive__title" transition:name={`project-${project.slug}-title`}>
-                {project.title}
-              </span>
-              <span class="archive__brand">{project.brand}</span>
-              <span class="archive__categories">{formatCategories(project.categories)}</span>
-              <span class="archive__year">{project.year}</span>
-            </a>
+            <span class="archive__index">{String(index + 1).padStart(3, '0')}</span>
+            <span class="archive__title">{project.title}</span>
+            <span class="archive__brand">{project.brand}</span>
+            <span class="archive__year">{project.year}</span>
+            <span class="archive__time">{project.time}</span>
           </li>
         ))}
-      </ul>
+      </ol>
     ) : (
       <p class="empty-message">No projects yet.</p>
     )

@@ -17,6 +17,11 @@
   height: var(--height-bubble);
 }
 
+/* The header animates itself. The router's snapshot otherwise hides it for a frame. */
+.site-header[data-astro-transition-scope] {
+  view-transition-name: none;
+}
+
 .site-header__logo,
 .site-header__project,
 .site-header__link,
@@ -49,16 +54,8 @@
   margin-left: var(--small-gap);
 }
 
-.site-header__context:not(:has(.site-header__project:not([hidden]))):not(:has(.site-header__link)) {
+.site-header__context:not(:has(.site-header__project:not([hidden]))) {
   display: none;
-}
-
-/* The current section is the nav link itself, parked beside the logo. */
-.site-header__context .site-header__link {
-  --bubble: 1;
-  width: max-content;
-  padding-inline: var(--inline-gap);
-  color: var(--background-color);
 }
 
 .site-header__project {
@@ -75,12 +72,55 @@
   display: none;
 }
 
-/* Work page. List sits under the Work link, with Reel beside it. */
+/* Closed: only the active link has size. The others stay in the row at width 0 so they can grow open. */
+.site-header:not([data-open]) .site-header__links {
+  gap: 0;
+}
+
+.site-header:not([data-open]) .site-header__nav:has([aria-current='page']) {
+  width: max-content;
+  margin-left: var(--small-gap);
+  overflow: visible;
+}
+
+.site-header__links .site-header__link[aria-current='page'] {
+  --bubble: 1;
+  width: max-content;
+  padding-inline: var(--inline-gap);
+  color: var(--background-color);
+}
+
+/* Closed menu, changing section. Both links use --bubble so one can shrink while the other grows. */
+.site-header.is-section-swap:not([data-open]) .site-header__nav {
+  width: max-content;
+  margin-left: var(--small-gap);
+  overflow: visible;
+}
+
+.site-header.is-section-swap .site-header__links .site-header__link {
+  width: calc(var(--full, 0px) * var(--bubble));
+  padding-inline: 0;
+  color: var(--background-color);
+}
+
+/* Work page. List sits under the Work link, with Reel beside it.
+   The column is the Work link, so the buttons match it from the first paint. */
+.site-header__work {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content;
+  flex: none;
+}
+
+.site-header__work > .site-header__link {
+  grid-area: 1 / 1;
+}
+
 .site-header__views {
   position: absolute;
-  width: 100%;
   top: calc(100% + var(--small-gap));
   left: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -88,8 +128,29 @@
   z-index: 1;
 }
 
+/* The reel menu opens in the row, so List and Reel stay visible. The nav
+   otherwise clips them until the open animation settles. */
+body:not([data-work-view='list']) .site-header__nav:has(.site-header__views:not([hidden])) {
+  overflow: visible;
+}
+
 .site-header__views[hidden] {
   display: none;
+}
+
+@keyframes site-header-views-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.site-header__views.is-views-in {
+  animation: site-header-views-in var(--transition-duration) linear;
+}
+
+.site-header.is-views-out .site-header__views {
+  opacity: 0;
+  transition: opacity var(--transition-duration) linear;
 }
 
 .site-header__view {
@@ -97,6 +158,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   height: var(--height-bubble);
   padding-inline: var(--inline-gap);
   background: transparent;
@@ -124,86 +186,169 @@
   transform: scale(0.5);
 }
 
-/* List mode: the menu stacks under Work and + stays put, as a minus.
-   The menu paints over List and Reel and wipes down across them. */
-body[data-work-view='list'] .site-header.is-settled[data-open] .site-header__views {
-  visibility: hidden;
+/* Product page. Title fills the Merch slot. Price and Buy sit under it. */
+.site-header__merch {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content;
+  flex: none;
 }
 
-body[data-work-view='list'] .site-header[data-open] .site-header__toggle {
-  width: var(--height-bubble);
-  margin-left: var(--small-gap);
-  overflow: visible;
-  display: flex;
+.site-header__merch > .site-header__link,
+.site-header__merch > .site-header__product-title {
+  grid-area: 1 / 1;
 }
 
-body[data-work-view='list'] .site-header[data-open] .site-header__nav {
-  --bubble: 0;
+.site-header__product-title {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: var(--height-bubble);
+  padding-inline: var(--inline-gap);
+  margin: 0;
+  background: var(--foreground-color);
+  color: var(--background-color);
+  font: inherit;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.site-header__product {
   position: absolute;
   top: calc(100% + var(--small-gap));
-  left: var(--list-nav-left, 0px);
-  width: max-content;
-  height: calc(var(--list-nav-full, 0px) * var(--bubble));
-  margin-left: 0;
-  overflow: hidden;
+  left: 0;
+  display: none;
+  align-items: stretch;
+  gap: var(--small-gap);
   z-index: 1;
-  transition: --bubble var(--transition-duration) linear;
+  height: var(--height-bubble);
+  color: var(--foreground-color);
+  font: inherit;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-body[data-work-view='list'] .site-header[data-open]:not([data-closing]) .site-header__nav {
-  --bubble: 1;
+/* Price and Buy are bubbles like the header: the price filled, Buy outlined. */
+.site-header__price,
+.site-header__buy {
+  display: flex;
+  align-items: center;
+  padding-inline: var(--inline-gap);
 }
 
-body[data-work-view='list'] .site-header.is-settled[data-open] .site-header__nav {
-  overflow: visible;
-}
-
-body[data-work-view='list'] .site-header[data-open] .site-header__links {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-/* Full width immediately, labels included. The stack itself grows downward. */
-body[data-work-view='list'] .site-header__links .site-header__link {
-  width: max-content;
-  padding-inline: var(--gap);
-}
-
-body[data-work-view='list'] .site-header[data-open] .site-header__links .site-header__link {
+.site-header__price {
+  background: var(--foreground-color);
   color: var(--background-color);
 }
 
-body[data-work-view='list'] .site-header__links .site-header__link[aria-current='page'] {
+.site-header__buy {
+  background: var(--background-color);
+  box-shadow: inset 0 0 0 1px var(--foreground-color);
+  color: var(--foreground-color);
+  text-decoration: none;
+}
+
+body[data-page='product'] .site-header__nav:has([data-product-buy]:not([hidden])) {
+  overflow: visible;
+}
+
+body[data-page='product'] .site-header:not([data-open]):not([data-about]) .site-header__product-title:not([hidden]) {
+  display: flex;
+}
+
+body[data-page='product'] .site-header:not([data-open]):not([data-about]) .site-header__merch:has([data-product-title]:not([hidden])) > .site-header__link {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body[data-page='product'] .site-header:not([data-open]):not([data-about]) .site-header__product:not([hidden]) {
+  display: flex;
+}
+
+body[data-page='product'] .site-header[data-open] .site-header__product-title,
+body[data-page='product'] .site-header[data-open] .site-header__product,
+body[data-page='product'] .site-header[data-about] .site-header__product-title,
+body[data-page='product'] .site-header[data-about] .site-header__product {
   display: none;
 }
 
-@media (max-width: 30rem) {
-  body[data-work-view='list'] .site-header[data-open] {
-    flex-direction: row;
-    align-items: stretch;
-    height: var(--height-bubble);
-    gap: 0;
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__nav {
-    width: max-content;
-    max-width: none;
-    margin-left: 0;
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__links {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    width: max-content;
-    max-width: none;
+/* Desktop only. On a phone the menu is always a column (see the phone block at the end). */
+@media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
+  /* List mode: Work and + stay in the row. List and Reel hide, and the other
+     links wipe down under Work. */
+  body[data-work-view='list'] .site-header[data-open] .site-header__views {
+    visibility: hidden;
   }
 
   body[data-work-view='list'] .site-header[data-open] .site-header__toggle {
+    width: var(--height-bubble);
+    margin-left: var(--small-gap);
+    overflow: visible;
     display: flex;
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__nav {
+    --bubble: 0;
+    position: relative;
+    width: max-content;
+    height: var(--height-bubble);
+    margin-left: var(--small-gap);
+    overflow: visible;
+    z-index: 1;
+    clip-path: inset(0 -100vw calc(var(--list-nav-drop, 0px) * -1 * var(--bubble)) 0);
+    transition: --bubble var(--transition-duration) linear;
+  }
+
+  body[data-work-view='list'] .site-header[data-open]:not([data-closing]) .site-header__nav {
+    --bubble: 1;
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__links {
+    position: relative;
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__links .site-header__link {
+    width: max-content;
+    color: var(--background-color);
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__link[aria-current='page'] {
+    position: relative;
+    padding-inline: var(--inline-gap);
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__link:not([aria-current='page']) {
+    position: absolute;
+    left: 0;
+    padding-inline: var(--gap);
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__link:nth-child(2) {
+    top: calc(1 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__link:nth-child(3) {
+    top: calc(2 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__links > .site-header__merch {
+    position: absolute;
+    left: 0;
+    top: calc(3 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__merch > .site-header__link {
+    position: relative;
+    padding-inline: var(--gap);
+  }
+
+  body[data-work-view='list'] .site-header[data-open] .site-header__link:nth-child(5) {
+    top: calc(4 * (var(--height-bubble) + var(--small-gap)));
   }
 }
 
 .site-header__nav {
+  position: relative;
   width: 0;
   margin-left: 0;
   overflow: hidden;
@@ -247,6 +392,15 @@ body[data-work-view='list'] .site-header__links .site-header__link[aria-current=
   overflow: hidden;
 }
 
+.site-header__toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.site-header__toggle svg[hidden] {
+  display: none;
+}
+
 .site-header:not([data-open]) .site-header__toggle {
   overflow: visible;
   transition:
@@ -274,30 +428,6 @@ body[data-work-view='list'] .site-header__links .site-header__link[aria-current=
     margin-left var(--transition-duration) linear;
 }
 
-@media (max-width: 30rem) {
-  .site-header[data-open] {
-    flex-direction: column;
-    align-items: flex-start;
-    height: auto;
-    gap: var(--small-gap);
-  }
-
-  .site-header[data-open] .site-header__nav {
-    width: auto;
-    max-width: calc(100vw - var(--margin) * 2);
-    margin-left: 0;
-  }
-
-  .site-header[data-open] .site-header__links {
-    flex-wrap: wrap;
-    width: auto;
-    max-width: calc(100vw - var(--margin) * 2);
-  }
-
-  .site-header[data-open] .site-header__toggle {
-    display: none;
-  }
-}
 
 @media (scripting: none) {
   .site-header__nav {
@@ -314,5 +444,690 @@ body[data-work-view='list'] .site-header__links .site-header__link[aria-current=
 
   .site-header__toggle {
     display: none;
+  }
+}
+
+/* Project page: the header becomes the player bar. */
+@keyframes player-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.site-header {
+  transition: opacity 0.4s ease;
+}
+
+.site-header__player {
+  display: none;
+}
+
+.site-header__name {
+  display: none;
+}
+
+.site-header__name-text[hidden],
+.site-header__seek[hidden],
+.site-header__time[hidden],
+.site-header__info[hidden],
+.site-header__info-close[hidden] {
+  display: none;
+}
+
+.site-header__name-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline: var(--inline-gap);
+  line-height: 1;
+}
+
+.site-header__slot,
+.site-header__close,
+.site-header__info-close {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--height-bubble);
+  height: var(--height-bubble);
+}
+
+.site-header__close svg,
+.site-header__info-close svg {
+  width: 11px;
+  height: 11px;
+}
+
+.site-header__seek {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 2rem;
+  height: var(--height-bubble);
+  padding-inline: var(--inline-gap);
+}
+
+.site-header__wave {
+  --wave-rest: color-mix(in srgb, var(--background-color) 35%, transparent);
+  display: block;
+  width: 100%;
+  height: 14px;
+  pointer-events: none;
+}
+
+.site-header__seek input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.site-header__seek input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1px;
+  height: var(--height-bubble);
+  background: transparent;
+}
+
+.site-header__seek input[type='range']::-moz-range-thumb {
+  width: 1px;
+  height: var(--height-bubble);
+  border: 0;
+  background: transparent;
+}
+
+.site-header__time {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: var(--height-bubble);
+  padding-inline: var(--inline-gap);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-mono);
+  font-weight: var(--font-weight-mono);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+body[data-page='project'] {
+  overflow: hidden;
+  background: var(--black);
+}
+
+body[data-page='project'] .site-footer {
+  display: none;
+}
+
+body[data-page='project'] .site-header {
+  top: auto;
+  bottom: var(--margin);
+  left: var(--margin);
+  right: var(--margin);
+  width: auto;
+  height: var(--height-bubble);
+  transform: none;
+  align-items: flex-end;
+  gap: var(--small-gap);
+  background: transparent;
+  color: var(--background-color);
+}
+
+body[data-page='project'] .site-header__logo,
+body[data-page='project'] .site-header__slot,
+body[data-page='project'] .site-header__seek,
+body[data-page='project'] .site-header__time,
+body[data-page='project'] .site-header__close {
+  background: var(--foreground-color);
+  color: var(--background-color);
+}
+
+body[data-page='project'] .site-header__logo {
+  margin: 0;
+}
+
+body[data-page='project'] .site-header__context,
+body[data-page='project'] .site-header__nav,
+body[data-page='project'] .site-header__toggle {
+  display: none;
+}
+
+body[data-page='project'] .site-header__player {
+  --player-info-width: min(22rem, calc(100vw - var(--margin) * 2 - 12rem));
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  gap: var(--small-gap);
+  min-width: 0;
+  height: var(--height-bubble);
+  opacity: 1;
+}
+
+body[data-page='project'] .site-header__name {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  width: max-content;
+  max-width: var(--player-info-width);
+  height: var(--height-bubble);
+  margin: 0;
+  overflow: hidden;
+  background: var(--foreground-color);
+  color: var(--background-color);
+}
+
+body[data-page='project'] .site-header__name[data-open] {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--player-info-width);
+  max-width: var(--player-info-width);
+  height: calc(100dvh - var(--margin) * 2);
+}
+
+body[data-page='project'] .site-header__name-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--small-gap);
+  height: var(--height-bubble);
+  min-width: 0;
+}
+
+body[data-page='project'] .site-header__name-title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
+body[data-page='project'] .site-header__name[data-open] .site-header__name-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--background-color) 35%, transparent);
+}
+
+body[data-page='project'] .site-header__info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--gap);
+  min-height: 0;
+  padding: var(--gap) var(--inline-gap) var(--gap);
+  overflow: auto;
+}
+
+body[data-page='project'] .site-header__info[hidden],
+body[data-page='project'] .site-header__info-close[hidden] {
+  display: none;
+}
+
+body[data-page='project'] .site-header__info .project__credits {
+  margin-top: auto;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-mono);
+  font-weight: var(--font-weight-mono);
+  line-height: var(--line-height-mono);
+}
+
+body[data-page='project'] .site-header__info .project__description p + p,
+body[data-page='project'] .site-header__info .project__credits p + p {
+  margin-top: var(--small-gap);
+}
+
+body[data-page='project'] .site-header__slot {
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight);
+  line-height: var(--line-height);
+  letter-spacing: var(--letter-spacing);
+  position: relative;
+}
+
+body[data-page='project'] .site-header__slot-icon {
+  position: relative;
+  top: -1px;
+}
+
+/* Open info sits over the title slot; keep the following controls clear of it. */
+body[data-page='project'] .site-header__name[data-open] ~ .site-header__slot {
+  margin-left: var(--player-info-width);
+}
+
+.site-header.is-arriving .site-header__player {
+  animation: player-in 0.2s ease both;
+}
+
+/* The logo bubble stays put. The other pieces fade in once it has moved. */
+.site-header.is-leaving .site-header__context,
+.site-header.is-leaving .site-header__toggle {
+  animation: player-in 0.18s ease both;
+}
+
+.site-header.is-leaving .site-header__logo,
+.site-header.is-leaving .site-header__player {
+  background: var(--foreground-color);
+  color: var(--background-color);
+}
+
+body[data-player-idle] .site-header {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body[data-page='project'] .site-header :focus-visible {
+  outline-color: var(--background-color);
+}
+
+/* Archive: the header is the column bar. It eases open, then back to the small header. */
+body[data-page='archive'] {
+  --archive-columns: 4.5rem minmax(8rem, 1.7fr) minmax(5rem, 0.8fr) 4.5rem 8.5rem;
+}
+
+.site-header__columns {
+  display: none;
+}
+
+body[data-page='archive'] .site-header:not([data-about]) {
+  width: max-content;
+  transform: translateY(-50%) translateX(calc(-1 * var(--archive-shift, 0px)));
+  transition: width var(--transition-duration) linear;
+}
+
+body[data-page='archive'] .site-header.is-archive-open:not([data-about]) {
+  width: calc(100vw - var(--margin) * 2);
+}
+
+body[data-page='archive'] .site-header__columns {
+  display: grid;
+  flex: 0 0 0px;
+  grid-template-columns: var(--archive-columns);
+  column-gap: var(--gap);
+  align-items: center;
+  min-width: 0;
+  height: var(--height-bubble);
+  margin-left: 0;
+  padding-inline: var(--inline-gap);
+  overflow: hidden;
+  opacity: 0;
+  background: var(--foreground-color);
+  color: var(--background-color);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-mono);
+  font-weight: var(--font-weight-mono);
+  line-height: var(--line-height-mono);
+  letter-spacing: var(--letter-spacing-mono);
+  white-space: nowrap;
+  transition:
+    flex-grow var(--transition-duration) linear,
+    flex-basis var(--transition-duration) linear,
+    min-width var(--transition-duration) linear,
+    margin-left var(--transition-duration) linear,
+    padding-inline var(--transition-duration) linear,
+    opacity var(--transition-duration) linear;
+}
+
+/* Behaviour: no padding while the bar is closed, so the closed header is as wide here as on
+   every other page and does not snap when the page changes. */
+body[data-page='archive'] .site-header:not(.is-archive-open) .site-header__columns {
+  padding-inline: 0;
+}
+
+body[data-page='archive'] .site-header.is-archive-open .site-header__columns {
+  flex: 1 1 auto;
+  min-width: 32rem;
+  margin-left: var(--small-gap);
+  opacity: 1;
+}
+
+body[data-page='archive'] .site-header[data-about] .site-header__columns {
+  display: none;
+}
+
+.site-header__columns > :last-child {
+  text-align: right;
+}
+
+@media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
+  body[data-page='archive'] .site-header[data-open] .site-header__toggle {
+    width: var(--height-bubble);
+    margin-left: var(--small-gap);
+    overflow: visible;
+    display: flex;
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__nav {
+    --bubble: 0;
+    position: relative;
+    width: max-content;
+    height: var(--height-bubble);
+    margin-left: var(--small-gap);
+    overflow: visible;
+    z-index: 1;
+    clip-path: inset(0 -100vw calc(var(--list-nav-drop, 0px) * -1 * var(--bubble)) 0);
+    transition: --bubble var(--transition-duration) linear;
+  }
+
+  body[data-page='archive'] .site-header[data-open]:not([data-closing]) .site-header__nav {
+    --bubble: 1;
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__links {
+    position: relative;
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__links .site-header__link {
+    width: max-content;
+    color: var(--background-color);
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__link[aria-current='page'] {
+    position: relative;
+    padding-inline: var(--inline-gap);
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__link:not([aria-current='page']) {
+    position: absolute;
+    left: 0;
+    padding-inline: var(--gap);
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__links > .site-header__work > .site-header__link {
+    top: calc(1 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__link:nth-child(2) {
+    top: calc(2 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__links > .site-header__merch {
+    position: absolute;
+    left: 0;
+    top: calc(3 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__merch > .site-header__link {
+    position: relative;
+    top: auto;
+    padding-inline: var(--gap);
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__link:nth-child(5) {
+    top: calc(4 * (var(--height-bubble) + var(--small-gap)));
+  }
+}
+
+@media (scripting: none) {
+  body[data-page='archive'] .site-header:not([data-about]) {
+    width: calc(100vw - var(--margin) * 2);
+  }
+
+  body[data-page='archive'] .site-header__columns {
+    flex: 1 1 auto;
+    min-width: 32rem;
+    margin-left: var(--small-gap);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-page='archive'] .site-header,
+  body[data-page='archive'] .site-header__columns {
+    transition: none;
+  }
+}
+
+/* Phone, and phones turned sideways. The wordmark shrinks to its c. Closed, the
+   header is c and +, with no section bubble. Open, the links stack in a column
+   that starts on the header row and covers the +, so nothing else on the row
+   moves. Home, the Work reel, merch and product pages dock the header at the
+   bottom, and their column grows upward. The Work list docks it at the top. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .site-header {
+    --row: calc(var(--height-bubble) + var(--small-gap));
+    --dock-below: 0px;
+    --logo-w: var(--height-bubble);
+  }
+
+  .site-header__logo {
+    flex: none;
+    justify-content: flex-start;
+    width: var(--logo-w);
+    padding-inline: 0;
+    overflow: hidden;
+  }
+
+  /* The c is the first 12.71 units of the wordmark. */
+  .site-header__logo svg {
+    flex: none;
+    max-width: none;
+    margin-left: calc((var(--height-bubble) - 12.71px) / 2);
+    clip-path: inset(0 calc(100% - 12.71px) 0 0);
+  }
+
+  .site-header .site-header__nav,
+  .site-header:not([data-open]) .site-header__nav:has([aria-current='page']),
+  .site-header.is-section-swap:not([data-open]) .site-header__nav {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: calc(var(--logo-w) + var(--small-gap));
+    width: max-content;
+    margin-left: 0;
+    overflow: visible;
+  }
+
+  /* The current section grows and shrinks with the others. */
+  .site-header .site-header__links .site-header__link[aria-current='page'] {
+    width: calc(var(--full, 0px) * var(--bubble));
+    padding-inline: 0;
+  }
+
+  .site-header:not([data-open]) .site-header__links .site-header__link[aria-current='page'] {
+    --bubble: 0;
+    color: transparent;
+  }
+
+  .site-header[data-open] .site-header__links {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* The open column wipes in row by row: top to bottom, or bottom to top where the
+     header is docked at the bottom. Every link runs --bubble from 0 to 1 at once;
+     --i places each one in the wipe, so a row shows once the wipe reaches it. The
+     links keep their full width, so nothing grows sideways. */
+  .site-header__links > :nth-child(1) { --i: 0; }
+  .site-header__links > :nth-child(2) { --i: 1; }
+  .site-header__links > :nth-child(3) { --i: 2; }
+  .site-header__links > :nth-child(4) { --i: 3; }
+  .site-header__links > :nth-child(5) { --i: 4; }
+
+  .site-header[data-open] .site-header__links .site-header__link,
+  .site-header[data-open] .site-header__links .site-header__link[aria-current='page'] {
+    --shown: clamp(0, calc(var(--bubble) * 5 - var(--i, 0)), 1);
+    width: var(--full, max-content);
+    color: var(--background-color);
+    clip-path: inset(0 0 calc((1 - var(--shown)) * 100%) 0);
+  }
+
+  body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-open] .site-header__links .site-header__link {
+    --shown: clamp(0, calc(var(--bubble) * 5 - (4 - var(--i, 0))), 1);
+    clip-path: inset(calc((1 - var(--shown)) * 100%) 0 0 0);
+  }
+
+  /* Archive: while the menu is open, the column bar looks like a row, so the links
+     over it stay easy to read. */
+  body[data-page='archive'] .site-header[data-open] .site-header__columns {
+    position: relative;
+    background: var(--background-color);
+    color: var(--foreground-color);
+  }
+
+  body[data-page='archive'] .site-header[data-open] .site-header__columns::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 200%;
+    height: 200%;
+    box-shadow: inset 0 0 0 1px currentColor;
+    transform-origin: top left;
+    transform: scale(0.5);
+    pointer-events: none;
+  }
+
+  .site-header[data-open]:not([data-closing]) .site-header__toggle {
+    width: var(--height-bubble);
+    margin-left: var(--small-gap);
+    visibility: hidden;
+  }
+
+  /* Closed, the links are a row of zero widths, so Work and Merch sit on the
+     header row and their extras can be placed from there. */
+  .site-header__views {
+    top: 0;
+    left: calc(var(--height-bubble) + var(--small-gap));
+    flex-direction: row-reverse;
+    width: max-content;
+  }
+
+  .site-header__view {
+    width: auto;
+    padding-inline: var(--gap);
+  }
+
+  .site-header[data-open] .site-header__views {
+    visibility: hidden;
+  }
+
+  body[data-page='product'] .site-header__product-title {
+    position: absolute;
+    top: 0;
+    left: calc(var(--height-bubble) + var(--small-gap));
+  }
+
+  body[data-page='product'] .site-header__product {
+    top: var(--row);
+    left: calc(-1 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  .site-header__buy {
+    background: var(--foreground-color);
+    box-shadow: none;
+    color: var(--background-color);
+  }
+
+  /* Home: the project title sits on its own row under the header. */
+  .site-header__context {
+    position: absolute;
+    top: calc(100% + var(--small-gap));
+    left: 0;
+    margin-left: 0;
+  }
+
+  .site-header__project {
+    max-width: calc(100vw - var(--margin) * 2);
+  }
+
+  body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header:not([data-about]) {
+    /* header.js sets --footer-push as the footer comes up, until the header reaches the middle. */
+    top: max(50dvh, calc(100dvh - var(--margin) - var(--height-bubble) / 2 - var(--dock-below) - var(--footer-push, 0px)));
+  }
+
+  /* Pushed by the footer: the whole wordmark comes back, and the rows under the
+     header make way for the footer. */
+  .site-header__logo,
+  .site-header__logo svg {
+    transition:
+      width var(--transition-duration) linear,
+      margin-left var(--transition-duration) linear,
+      clip-path var(--transition-duration) linear;
+  }
+
+  .site-header[data-footer] {
+    --logo-w: calc(82px + var(--inline-gap) * 2);
+  }
+
+  .site-header[data-footer] .site-header__logo svg {
+    margin-left: var(--inline-gap);
+    clip-path: inset(0 0 0 0);
+  }
+
+  .site-header[data-footer] :is(.site-header__product-title, .site-header__product, .site-header__context) {
+    visibility: hidden;
+  }
+
+  body[data-page='product'] .site-footer {
+    padding-top: var(--gap);
+  }
+
+  body:is(:has([data-roulette]), [data-page='product']) .site-header:not([data-about]) {
+    --dock-below: var(--row);
+  }
+
+  body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header .site-header__nav {
+    top: auto;
+    bottom: 0;
+  }
+
+  body[data-work-view='list']:has([data-work-list]) .site-header:not([data-about]) {
+    top: calc(var(--margin) + var(--height-bubble) / 2);
+  }
+
+  /* Archive: the column bar keeps only the title and the brand. */
+  body[data-page='archive'] {
+    --archive-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  body[data-page='archive'] .site-header.is-archive-open .site-header__columns {
+    min-width: 0;
+  }
+
+  .site-header__columns > :is(:nth-child(1), :nth-child(4), :nth-child(5)) {
+    display: none;
+  }
+
+  .site-header__columns > :nth-child(3) {
+    text-align: right;
+  }
+
+  /* Project player. The name keeps room for the controls; its details open
+     across the whole bar, over the c. */
+  body[data-page='project'] .site-header__player {
+    --player-info-width: calc(100vw - var(--margin) * 2);
+  }
+
+  body[data-page='project'] .site-header__name {
+    max-width: 45vw;
+  }
+
+  body[data-page='project'] .site-header__name[data-open] {
+    left: calc(-1 * (var(--height-bubble) + var(--small-gap)));
+  }
+
+  body[data-page='project'] .site-header__name[data-open] ~ * {
+    visibility: hidden;
   }
 }

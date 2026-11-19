@@ -3,6 +3,7 @@
 import { closeNav } from './header.js';
 
 const VIEW_KEY = 'work-view';
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let list;
 
 function stillImage() {
@@ -51,14 +52,66 @@ function syncInset() {
   document.documentElement.style.setProperty('--work-list-inset', `${right + 1}px`);
 }
 
-function setFiltersOpen(open) {
+function finishFiltersClose() {
+  const filters = list?.querySelector('.work-list__filters');
   const panel = list?.querySelector('[data-filters-panel]');
   const openButton = list?.querySelector('[data-filters-open]');
   const closeButton = list?.querySelector('[data-filters-close]');
-  if (!panel || !openButton || !closeButton) return;
-  panel.hidden = !open;
-  openButton.hidden = open;
-  closeButton.hidden = !open;
+  if (!filters || !panel || filters.hasAttribute('data-open')) return;
+  panel.hidden = true;
+  panel.style.transition = '';
+  panel.style.removeProperty('--bubble');
+  filters.removeAttribute('data-closing');
+  if (openButton) openButton.hidden = false;
+  if (closeButton) closeButton.hidden = true;
+}
+
+function setFiltersOpen(open) {
+  const filters = list?.querySelector('.work-list__filters');
+  const panel = list?.querySelector('[data-filters-panel]');
+  const openButton = list?.querySelector('[data-filters-open]');
+  const closeButton = list?.querySelector('[data-filters-close]');
+  if (!filters || !panel || !openButton || !closeButton) return;
+
+  const shown = filters.hasAttribute('data-open');
+  if (open === shown && !filters.hasAttribute('data-closing')) return;
+
+  if (reducedMotion.matches) {
+    filters.removeAttribute('data-open');
+    filters.removeAttribute('data-closing');
+    panel.hidden = !open;
+    panel.style.removeProperty('--bubble');
+    openButton.hidden = open;
+    closeButton.hidden = !open;
+    return;
+  }
+
+  if (open) {
+    openButton.hidden = true;
+    closeButton.hidden = false;
+    panel.hidden = false;
+    panel.getAnimations().forEach((animation) => animation.cancel());
+    // Pin before data-open. Reversing --bubble from the stylesheet gets stuck.
+    panel.style.transition = 'none';
+    panel.style.setProperty('--bubble', '0');
+    filters.removeAttribute('data-closing');
+    filters.setAttribute('data-open', '');
+    panel.offsetHeight;
+    panel.style.transition = '';
+    panel.style.removeProperty('--bubble');
+    return;
+  }
+
+  const current = getComputedStyle(panel).getPropertyValue('--bubble').trim() || '0';
+  panel.getAnimations().forEach((animation) => animation.cancel());
+  panel.style.transition = 'none';
+  panel.style.setProperty('--bubble', current);
+  filters.setAttribute('data-closing', '');
+  filters.removeAttribute('data-open');
+  panel.offsetHeight;
+  panel.style.transition = '';
+  panel.style.setProperty('--bubble', '0');
+  if (parseFloat(current) === 0) finishFiltersClose();
 }
 
 function setView(view) {
@@ -135,6 +188,19 @@ document.addEventListener('click', (event) => {
   if (!event.target.closest('.work-list__filters')) setFiltersOpen(false);
 });
 
+/** Points the shared still at the project about to open, so the cover starts there. */
+function armListStill(row) {
+  if (!row) return;
+  showStill(row.dataset.still);
+}
+
+document.addEventListener('click', (event) => {
+  if (!list?.isConnected || list.hidden) return;
+  const row = event.target.closest?.('[data-work-row]');
+  if (!row || row.hidden || !list.contains(row)) return;
+  armListStill(row);
+}, true);
+
 document.addEventListener('pointerover', (event) => {
   if (!list?.isConnected || list.hidden) return;
   const row = event.target.closest?.('[data-work-row]');
@@ -152,5 +218,7 @@ document.addEventListener('focusin', (event) => {
 window.addEventListener('resize', () => syncInset());
 
 document.addEventListener('transitionend', (event) => {
-  if (event.propertyName === '--bubble') syncInset();
+  if (event.propertyName !== '--bubble') return;
+  syncInset();
+  if (event.target === list?.querySelector('[data-filters-panel]')) finishFiltersClose();
 });

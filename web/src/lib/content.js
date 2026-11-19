@@ -2,6 +2,7 @@ import { createClient } from '@sanity/client';
 import { createImageUrlBuilder } from '@sanity/image-url';
 import { getSecret, SANITY_DATASET, SANITY_PROJECT_ID, SANITY_STUDIO_URL, SITE_MODE } from 'astro:env/server';
 import * as placeholders from './placeholders.js';
+import { projectHasPage } from './pages.js';
 import { toVideo } from './video.js';
 
 export const isPreview = SITE_MODE === 'preview';
@@ -60,7 +61,7 @@ const MEDIA = `{ kind, image ${IMAGE}, poster ${IMAGE}, videoUrl }`;
 const QUERIES = {
   settings: `*[_type == "siteSettings"][0] {
     title, description, email, links[] { label, url },
-    popup { enabled, title, link, image ${IMAGE} }
+    news { enabled, items[] { _key, title, link, image ${IMAGE} } }
   }`,
   projects: `*[_type == "project" && defined(slug.current)] | order(year desc, title asc) {
     _id, title, "slug": slug.current, brand, year, time, categories, description, credits,
@@ -70,8 +71,8 @@ const QUERIES = {
   awards: `*[_type == "award"] | order(year desc, _createdAt asc) {
     _id, ceremony, category, work, year, image ${IMAGE}
   }`,
-  products: `*[_type == "product"] | order(_createdAt desc) {
-    _id, title, price, url, images[] ${IMAGE}
+  products: `*[_type == "product" && defined(slug.current)] | order(_createdAt desc) {
+    _id, title, "slug": slug.current, price, url, images[] ${IMAGE}
   }`,
   about: `*[_type == "aboutPage"][0] {
     content,
@@ -133,11 +134,16 @@ const stripEmpty = (object) =>
 
 const TRANSFORMS = {
   settings: (settings) => {
-    const { popup, ...rest } = stripEmpty(settings);
+    const { news, ...rest } = stripEmpty(settings);
+    const items = news?.enabled
+      ? (news.items ?? [])
+          .map((item) => ({ ...item, image: toImage(item.image) }))
+          .filter((item) => item.title && item.image)
+      : [];
     return {
       ...placeholders.settings,
       ...rest,
-      popup: popup?.enabled && popup.title ? { ...popup, image: toImage(popup.image) } : null,
+      news: items.length ? items : null,
       isPlaceholder: false,
     };
   },
@@ -147,12 +153,15 @@ const TRANSFORMS = {
   products: (products) =>
     products.map((product) => ({
       ...product,
-      images: (product.images ?? []).map((image) => toImage(image, 4 / 5)).filter(Boolean),
+      images: (product.images ?? []).map((image) => toImage(image)).filter(Boolean),
     })),
-  about: (about) => ({
-    content: about?.content ?? [],
-    team: (about?.team ?? []).map((member) => ({ ...member, image: toImage(member.image, 4 / 5) })),
-  }),
+  about: (about) => {
+    const content = about?.content ?? [];
+    const team = (about?.team ?? []).map((member) => ({ ...member, image: toImage(member.image, 4 / 5) }));
+    // An empty Studio document still has to show the panel while the copy is being written.
+    if (!content.length && !team.length) return placeholders.about;
+    return { content, team };
+  },
 };
 
 // A static build makes one request per query, however many pages ask.
@@ -173,8 +182,17 @@ export const getAwards = () => load('awards');
 export const getProducts = () => load('products');
 export const getAbout = () => load('about');
 
+/** One product by its page address. */
+export const getProduct = async (slug) => (await getProducts()).find((product) => product.slug === slug);
+
 export const getWorkProjects = async () => (await getProjects()).filter((project) => project.showInWork);
 export const getArchiveProjects = async () => (await getProjects()).filter((project) => project.showInArchive);
+
+/** Projects with a page: listed on the home page or the work page. */
+export const getPageProjects = async () => {
+  const [projects, ids] = await Promise.all([getProjects(), load('homeProjectIds')]);
+  return projects.filter((project) => projectHasPage(project, ids));
+};
 
 /** Projects picked for the home page, in the editor's order. */
 export async function getHomeProjects() {

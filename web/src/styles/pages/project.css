@@ -1,0 +1,96 @@
+/* Project player. The bar itself lives on the site header. */
+
+.project__source,
+.project__info-source {
+  display: none;
+}
+
+.project__media {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: var(--black);
+}
+
+.project__poster,
+.project__frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: contain;
+  background: var(--black);
+}
+
+/* Video stays invisible until playback starts, so the cover lands on black. */
+.project[data-kind='video'] .project__frame {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.project[data-kind='video'][data-started] .project__frame {
+  opacity: 1;
+}
+
+/* An image Project that was opened through the cover fades in from that black. */
+.project[data-kind='image'][data-reveal] .project__poster {
+  opacity: 0;
+}
+
+.project[data-kind='image'][data-reveal][data-started] .project__poster {
+  opacity: 1;
+  transition: opacity 0.35s ease;
+}
+
+.project[data-kind='video'] .project__poster {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.project[data-kind='video'] .project__poster[hidden] {
+  display: none;
+}
+
+.project[data-kind='video'][data-waiting] .project__poster {
+  display: block;
+  opacity: 1;
+}
+
+.project__hit {
+  position: absolute;
+  inset: 0;
+  touch-action: manipulation;
+}
+
+.project__hit.is-cursor,
+.project__media:has(.is-cursor) {
+  cursor: none;
+}
+
+.project__cursor svg {
+  width: 10px;
+  height: 10px;
+}
+
+.project__cursor {
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--height-bubble);
+  height: var(--height-bubble);
+  margin-left: calc(var(--height-bubble) / -2);
+  margin-top: calc(var(--height-bubble) / -2);
+  background: var(--foreground-color);
+  color: var(--background-color);
+  pointer-events: none;
+}
+
+.project__cursor[hidden],
+body[data-player-idle] .project__cursor {
+  display: none;
+}
