@@ -89,25 +89,48 @@ Open the Studio at http://localhost:3333, publish **Site settings** and a projec
 
 ## Part 2: Deploy production to Netlify
 
+The live site deploys from the **`production`** git branch (not `main`). Day-to-day work stays on
+`main`; you merge into `production` when the site should go live. That branch name is easy to mix up
+with Sanity's `production` dataset — same word, different things.
+
 ### 1. Import the site
 
 1. Push the repo to GitHub, GitLab or Bitbucket.
-2. In Netlify, choose **Add new project → Import an existing project**, then pick the repo.
-3. Set **Base directory** to `web`. Netlify then reads `web/netlify.toml`, which sets the build command
+2. Create the deploy branch if it doesn't exist yet, then push it:
+
+   ```bash
+   git switch -c production
+   git push -u origin production
+   git switch main
+   ```
+
+3. In Netlify, choose **Add new project → Import an existing project**, then pick the repo.
+4. Set **Base directory** to `web`. Netlify then reads `web/netlify.toml`, which sets the build command
    (`npm run build`) and the publish folder (`dist`, inside `web/`).
-4. Before the first deploy, open **Project configuration → Environment variables** and add these for all contexts:
+5. In **Project configuration → Build & deploy → Continuous deployment**, set **Production branch**
+   to `production`.
+6. Before the first deploy, open **Project configuration → Environment variables** and add these for all contexts:
    - `SANITY_PROJECT_ID`
    - `SANITY_DATASET` = `production`
-5. Deploy. Note the site address, for example `https://your-site.netlify.app`.
+7. Deploy. Note the site address, for example `https://your-site.netlify.app`.
 
-A push to `main` deploys production and uses credits, so batch your commits. Netlify skips the build
-when a push changes nothing in `web/`, so Studio-only changes are free. Builds from the
-"Put changes live" button always run.
+A push to `production` deploys the live site and uses credits, so batch what you merge. Netlify skips
+the build when a push changes nothing in `web/`, so Studio-only changes are free. Builds from the
+"Put changes live" button always run. Pushes to `main` alone do not update the live site.
+
+To ship code from `main`:
+
+```bash
+git switch production
+git merge main
+git push
+git switch main
+```
 
 ### 2. Connect the "Put changes live" button
 
 1. In Netlify, go to **Project configuration → Build & deploy → Build hooks → Add build hook**.
-   Name it `Sanity`, choose `main`, then copy the URL.
+   Name it `Sanity`, choose `production`, then copy the URL.
 2. In Sanity (`npx sanity manage`), go to **API → Webhooks → Create webhook**:
 
    | Field | Value |

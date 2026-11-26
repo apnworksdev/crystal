@@ -162,10 +162,11 @@ Single documents have fixed IDs equal to their type name and are listed in `SING
 
 | Environment | Mode | Shows |
 |---|---|---|
-| Production | Static build | Published content. Deploys only from "Put changes live" or a push to `main` |
+| Production | Static build | Published content. Deploys only from "Put changes live" or a push to the `production` branch |
 | Preview | `SITE_MODE=preview`, server-rendered on the `preview` branch | Drafts. Only opens from the Studio |
 | Local | `npm run dev:edit` (preview and Studio) or `npm run dev:all` (site and Studio) | |
 
+- **Work on `main`; ship by merging into `production`.** Netlify's production branch is `production`, not `main`.
 - **Production deploys cost Netlify credits.** Never add a webhook that deploys on every publish.
 - **`SANITY_READ_TOKEN` reads drafts.** It's only allowed in `web/.env` and Netlify's `preview` branch. Never put it
   in `netlify.toml`, a `PUBLIC_` variable or a `SANITY_STUDIO_` variable.

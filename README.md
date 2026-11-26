@@ -4,7 +4,7 @@ Portfolio site built with Astro and Sanity in plain JavaScript, hosted on Netlif
 
 | Environment | What it shows | How it updates | Rendering |
 |---|---|---|---|
-| **Production** | Published content | "Put changes live" in the Studio | Static |
+| **Production** | Published content | "Put changes live", or a push to the `production` branch | Static |
 | **Preview** | Drafts and published content | On every edit | Server, Studio sign-in required |
 | **Test** (optional) | Any dataset you choose | Pushing to a branch | Static |
 
@@ -14,7 +14,8 @@ Portfolio site built with Astro and Sanity in plain JavaScript, hosted on Netlif
 2. Click **Publish** when it's approved. The public site doesn't change yet.
 3. Open **Put changes live** when a batch is ready. This starts one production deploy.
 
-Each production deploy uses Netlify credits, and so does any push to `main` that changes `web/`.
+Each production deploy uses Netlify credits, and so does any push to `production` that changes `web/`.
+Day-to-day code work stays on `main`; merge into `production` when the live site should update.
 
 ## Folders
 
