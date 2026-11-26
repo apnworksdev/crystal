@@ -1,20 +1,30 @@
 // Open and closed state for the site header. Listeners stay on document so they
 // survive page transitions. setUpHeader runs again after each swap.
 
-import { collapseArchive } from './archive.js';
-import { dismissNews } from './news.js';
+import { collapseArchive, reopenArchiveBar, showArchiveFooter } from './archive.js';
+import { closeNewsWithAbout, dismissNews, openNewsWithAbout } from './news.js';
+import {
+  clearFooterReveal,
+  footerIsRaised,
+  homeFooterTop,
+  lowerFooter,
+  markFooterRaised,
+  raiseFooter,
+} from './footer-reveal.js';
+import { pinProductMorph, productMenuClosed, productMenuOpening } from './product.js';
 
 let navOpen = false;
 let aboutOpen = false;
 let closeTimer = 0;
 let titleTimer = 0;
+let menuIdleTimer = 0;
+const MENU_IDLE_MS = 3000;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 // Same query as the phone blocks in the stylesheets.
 const phone = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)');
 // Pages whose phone header is docked at the bottom. Same list as header.css.
 const DOCKED_BOTTOM =
   ":is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel]))";
-const textHold = 70;
 const SECTION_MS = 180;
 
 const NAV = [
@@ -29,7 +39,7 @@ function navLinks(header) {
   return header.querySelectorAll('.site-header__links .site-header__link');
 }
 
-/** Closed, the section links are out of reach. Only the links: List, Reel and Buy sit in
+/** Closed, the section links are out of reach. Only the links: List, Stack and Buy sit in
     the same list and stay usable while the menu is closed. */
 function setLinksInert(header, inert) {
   header.querySelector('.site-header__links')?.removeAttribute('inert');
@@ -94,9 +104,9 @@ function measureBubbles(header) {
 }
 
 function menuDrops() {
-  // On a phone every menu is a column with the + hidden under it.
-  if (phone.matches) return false;
-  return document.body.dataset.workView === 'list' || document.body.dataset.page === 'archive';
+  // Desktop menus open sideways and push the page. Phone menus are a column (CSS).
+  // Kept as a function so call sites stay readable; always false for now.
+  return false;
 }
 
 function listMenu(header) {
@@ -132,15 +142,42 @@ function alignListNav(header) {
   alignWorkViews(header);
 }
 
-function setToggleMark(header, open) {
-  const mark = header.querySelector('[data-header-mark]');
-  if (!mark) return;
-  const showMinus = open && menuDrops();
-  const plus = mark.querySelector('[data-header-plus]');
-  const minus = mark.querySelector('[data-header-minus]');
-  // SVGElement.hidden does not toggle the attribute in this browser.
-  if (plus) plus.toggleAttribute('hidden', showMinus);
-  if (minus) minus.toggleAttribute('hidden', !showMinus);
+// Phone: List and Stack sit where the column opens. They fade out in place instead of
+// jumping with the column and vanishing, and fade back once it has closed.
+let viewsFade = null;
+const EXPO = 'cubic-bezier(0.19, 1, 0.22, 1)';
+
+function endViewsFade() {
+  if (!viewsFade) return;
+  window.clearTimeout(viewsFade.timer);
+  viewsFade.header.removeAttribute('data-views-fading');
+  viewsFade.views.style.translate = '';
+  viewsFade.animation.cancel();
+  viewsFade = null;
+}
+
+/** Returns a step to run once the menu has opened, or nothing when there is nothing to fade. */
+function fadeViewsOut(header) {
+  endViewsFade();
+  const views = header.querySelector('[data-work-views]');
+  if (!phone.matches || reducedMotion.matches || !views || views.hidden) return null;
+  const box = views.getBoundingClientRect();
+  if (box.width < 1) return null;
+  return () => {
+    header.setAttribute('data-views-fading', '');
+    const now = views.getBoundingClientRect();
+    views.style.translate = `${box.left - now.left}px ${box.top - now.top}px`;
+    const animation = views.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: EXPO, fill: 'forwards' });
+    viewsFade = { header, views, animation, timer: window.setTimeout(endViewsFade, 320) };
+  };
+}
+
+function fadeViewsIn(header) {
+  endViewsFade();
+  const views = header.querySelector('[data-work-views]');
+  if (!phone.matches || reducedMotion.matches || !views || views.hidden) return;
+  if (views.getAnimations().length) return;
+  views.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: EXPO });
 }
 
 function applyNav(open, moveFocus, currentHref) {
@@ -155,7 +192,6 @@ function applyNav(open, moveFocus, currentHref) {
   navOpen = open;
   toggle.setAttribute('aria-expanded', String(open));
   toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-  if (open) setToggleMark(header, true);
 
   syncCurrentSection(header, currentHref);
   alignListNav(header);
@@ -163,13 +199,23 @@ function applyNav(open, moveFocus, currentHref) {
   if (open) {
     // On a phone the menu column would cover the news, so opening it closes the news.
     if (phone.matches) dismissNews();
+    raiseMenuFooter(header);
+    updateFooterPush();
+    // Idle close starts once the menu has settled (transitionend), not mid-open.
+    clearMenuIdle();
+    // Work list follows the growing menu so the gap stays one pixel.
+    document.dispatchEvent(new CustomEvent('crystal:menu-motion'));
     measureBubbles(header);
     header.removeAttribute('data-closing');
+    // Measured while the title is still shown, then kept over the Merch link as it shrinks.
+    productMenuOpening(header);
+    const fadeViews = fadeViewsOut(header);
     header.setAttribute('data-open', '');
+    pinProductMorph();
+    fadeViews?.();
     setLinksInert(header, false);
-    // The list keeps + visible, so it has to stay clickable to close.
-    if (menuDrops()) toggle.removeAttribute('inert');
-    else toggle.setAttribute('inert', '');
+    // The x stays beside the menu, so it stays clickable to close.
+    toggle.removeAttribute('inert');
     if (moveFocus) {
       const focusTarget = menuDrops()
         ? nav.querySelector('a:not([aria-current="page"])')
@@ -179,16 +225,20 @@ function applyNav(open, moveFocus, currentHref) {
     if (wasSettled) return;
 
     header.classList.remove('is-settled');
-    // Pin the current size, then let the stylesheet grow every bubble to 1.
-    // Reversing --bubble from the stylesheet gets stuck in this browser, so
-    // the close path sets its own value and the open path has to clear it.
     measureListNav(header);
     const links = bubbleTargets(header);
+    // Opened again while it was still closing: the close left its own --bubble values,
+    // so pin the current size, then let the stylesheet grow every bubble to 1. Reversing
+    // --bubble from the stylesheet gets stuck in this browser. From fully closed there is
+    // nothing to pin, and pinning would switch off the labels' and gaps' transitions too.
+    if (!links.some((link) => link.style.getPropertyValue('--bubble'))) return;
     const currents = links.map(
       (link) => getComputedStyle(link).getPropertyValue('--bubble').trim() || '0',
     );
     links.forEach((link, index) => {
-      link.getAnimations().forEach((animation) => animation.cancel());
+      link.getAnimations().forEach((animation) => {
+        if (animation.transitionProperty === '--bubble') animation.cancel();
+      });
       link.style.transition = 'none';
       link.style.setProperty('--bubble', currents[index]);
     });
@@ -203,6 +253,13 @@ function applyNav(open, moveFocus, currentHref) {
   toggle.removeAttribute('inert');
   setLinksInert(header, true);
   if (moveFocus) toggle.focus();
+  clearMenuIdle();
+  document.dispatchEvent(new CustomEvent('crystal:menu-motion'));
+  // A menu link leaves the page with the footer still up, so only a plain close lowers it.
+  if (currentHref === undefined) {
+    lowerMenuFooter();
+    updateFooterPush();
+  }
 
   const close = () => {
     if (navOpen || !header.isConnected) return;
@@ -211,32 +268,36 @@ function applyNav(open, moveFocus, currentHref) {
       (link) => getComputedStyle(link).getPropertyValue('--bubble').trim() || '0',
     );
     // Pin before data-closing. Otherwise the stylesheet drops --bubble to 0
-    // and that reverse transition sticks at the first frame.
+    // and that reverse transition sticks at the first frame. Transitions are back on
+    // before data-closing, so the labels and the gaps fade and shrink with the boxes.
     links.forEach((link, index) => {
-      link.getAnimations().forEach((animation) => animation.cancel());
+      link.getAnimations().forEach((animation) => {
+        if (animation.transitionProperty === '--bubble') animation.cancel();
+      });
       link.style.transition = 'none';
       link.style.setProperty('--bubble', currents[index]);
     });
-    header.setAttribute('data-closing', '');
     header.offsetWidth;
     links.forEach((link) => {
       link.style.transition = '';
+    });
+    header.offsetWidth;
+    header.setAttribute('data-closing', '');
+    links.forEach((link) => {
       link.style.setProperty('--bubble', '0');
     });
     if (currents.every((current) => parseFloat(current) === 0)) {
       links.forEach((link) => link.style.removeProperty('--bubble'));
       header.removeAttribute('data-open');
       header.removeAttribute('data-closing');
-      setToggleMark(header, false);
+      productMenuClosed();
+      fadeViewsIn(header);
     }
   };
 
   header.classList.remove('is-settled');
-  // The horizontal menu hides its labels, then shrinks. The list menu keeps
-  // them and wipes straight back up over List and Reel.
-  const drops = menuDrops();
-  if (wasSettled && !reducedMotion.matches && !drops && !phone.matches) closeTimer = window.setTimeout(close, textHold);
-  else close();
+  // Each label fades as its own box folds, so the fold starts with the x at once.
+  close();
 }
 
 /** Closes the menu. The project title bubble stays put. */
@@ -272,6 +333,40 @@ function hideAbout() {
     panel.inert = true;
   }
   header.querySelector('[data-about-open]')?.setAttribute('aria-expanded', 'false');
+  // News opened with About closes with it; an already-open popup stays.
+  closeNewsWithAbout();
+}
+
+/** Leaving the page from About: the windows fold away, then the page can change. */
+export function leaveAbout() {
+  const header = document.querySelector('.site-header');
+  const panel = aboutPanel(header);
+  if (!aboutOpen || !header || !panel || reducedMotion.matches) {
+    dismissAbout();
+    return Promise.resolve();
+  }
+  clearAboutMotion();
+  closeNewsWithAbout();
+  if (panel.dataset.menuWidth) panel.style.setProperty('--about-from', '0px');
+  panel.style.removeProperty('--about-w-end');
+  header.setAttribute('data-about-closing', '');
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearAboutMotion();
+      // The header row comes back without the current section, ready for the next one.
+      navLinks(header).forEach((link) => link.removeAttribute('aria-current'));
+      leftFromAbout = true;
+      dismissAbout();
+      resolve();
+    };
+    endAboutClose = (event) => {
+      if (event && (event.target !== panel || event.propertyName !== '--about-w')) return;
+      finish();
+    };
+    panel.addEventListener('transitionend', endAboutClose);
+    const grow = parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 || 500;
+    aboutMotion = window.setTimeout(endAboutClose, grow * 2 + 100);
+  });
 }
 
 /** Closes the about panel. The menu stays as it was. */
@@ -300,24 +395,59 @@ function snapNavClosed(header) {
   setLinksInert(header, true);
 }
 
-/** Phone only: shows the copy or the team. Desktop shows both and ignores this. */
+/** Phone only: shows the copy, the team, or the shared news panel. Desktop ignores this. */
 function showAboutTab(panel, tab) {
   if (!panel) return;
   panel.dataset.aboutView = tab;
   panel.querySelectorAll('.about-panel__tab').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.aboutTab === tab));
   });
-  const scroller = panel.querySelector(tab === 'team' ? '.about-panel__team' : '.about-panel__text');
+  const header = panel.closest('.site-header');
+  const news = header?.querySelector('[data-news-panel]');
+  const scroller = tab === 'team'
+    ? panel.querySelector('.about-panel__team')
+    : tab === 'news'
+      ? news?.querySelector('[data-news-photos]')
+      : panel.querySelector('.about-panel__text');
   if (scroller) scroller.scrollTop = 0;
+  // Phone: the view that takes the panel fades in rather than appearing at once.
+  const shownView = tab === 'team'
+    ? panel.querySelector('.about-panel__team')
+    : tab === 'news'
+      ? news
+      : panel.querySelector('.about-panel__body');
+  const switching = header?.hasAttribute('data-about');
+  if (switching && phone.matches && !reducedMotion.matches && shownView) {
+    shownView.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'cubic-bezier(0.19, 1, 0.22, 1)' });
+  }
 }
 
 function openAbout(moveFocus) {
   const header = document.querySelector('.site-header');
   if (!header || document.body.dataset.page === 'project') return;
+  // Archive: the column bar folds into the header first, then About opens from there.
+  if (header.classList.contains('is-archive-open') && !reducedMotion.matches) {
+    collapseArchive().then(() => {
+      if (!aboutOpen) openAbout(moveFocus);
+    });
+    return;
+  }
   clearAboutMotion();
+  // Desktop: the windows start as a strip over the open menu, so the menu turns into them,
+  // and close back to its width. News stays in its own place beside them, so only the
+  // menu's width counts.
+  const nav = header.querySelector('.site-header__nav');
+  let menuWidth = 0;
+  if (!phone.matches && navOpen && nav) menuWidth = nav.getBoundingClientRect().width;
+  const stripWidth = menuWidth;
+  // Same news element as the popup: leave it if open; otherwise open it with About.
+  openNewsWithAbout();
   snapNavClosed(header);
   aboutOpen = true;
   const panel = aboutPanel(header);
+  panel?.style.setProperty('--about-from', `${Math.round(stripWidth)}px`);
+  panel?.style.removeProperty('--about-w-end');
+  if (panel) panel.dataset.menuWidth = String(Math.round(menuWidth));
   if (panel) {
     panel.hidden = false;
     panel.inert = false;
@@ -336,33 +466,56 @@ function openAbout(moveFocus) {
   toggle?.removeAttribute('inert');
   toggle?.setAttribute('aria-expanded', 'true');
   toggle?.setAttribute('aria-label', 'Close about');
-  setToggleMark(header, false);
   if (moveFocus) header.querySelector('[data-about-close]')?.focus();
 }
 
 function finishAboutClose(moveFocus) {
   if (!aboutOpen) return;
+  const header = document.querySelector('.site-header');
   hideAbout();
   applyNav(true, moveFocus);
+  // The windows have narrowed back to the menu's width, so the menu is already there:
+  // its boxes take their full size at once, and only the labels fade in.
+  if (header && !phone.matches) {
+    bubbleTargets(header).forEach((target) => {
+      target.getAnimations().forEach((animation) => {
+        if (animation.transitionProperty === '--bubble' || animation.transitionProperty === 'margin-right') {
+          animation.finish();
+        }
+      });
+    });
+    header.querySelector('.site-header__nav')?.getAnimations().forEach((animation) => animation.finish());
+  }
+  reopenArchiveBar();
 }
 
 /** Closes about and opens the menu, so About is a button again. */
 function closeAboutToNav(moveFocus) {
   const header = document.querySelector('.site-header');
   if (!aboutOpen || !header || header.hasAttribute('data-about-closing')) return;
+  // Fold news with About when it was opened with About; an independent popup stays.
+  closeNewsWithAbout();
   const panel = aboutPanel(header);
   if (!panel || reducedMotion.matches) {
     finishAboutClose(moveFocus);
     return;
   }
+  // The strip narrows to the menu's own width and ends there, so the menu takes over at once.
+  const menuWidth = Number(panel.dataset.menuWidth) || 0;
+  if (menuWidth) panel.style.setProperty('--about-from', `${menuWidth}px`);
+  const fullWidth = panel.getBoundingClientRect().width;
+  panel.style.setProperty('--about-w-end', fullWidth > menuWidth && menuWidth ? String(menuWidth / fullWidth) : '0');
   header.setAttribute('data-about-closing', '');
+  // The windows fold down first, then narrow back to the menu. The last of those ends it.
   endAboutClose = (event) => {
-    if (event && (event.target !== panel || event.propertyName !== '--about')) return;
+    if (event && (event.target !== panel || event.propertyName !== '--about-w')) return;
     clearAboutMotion();
     finishAboutClose(moveFocus);
   };
   panel.addEventListener('transitionend', endAboutClose);
-  aboutMotion = window.setTimeout(endAboutClose, SECTION_MS + 80);
+  // Fallback for a background tab, which never runs the transitions: fold, then narrow.
+  const grow = parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 || 500;
+  aboutMotion = window.setTimeout(endAboutClose, grow * 2 + 100);
 }
 
 function paintHeaderProject(link, title, href) {
@@ -461,12 +614,25 @@ function delay(ms) {
   });
 }
 
+/** How long the open menu takes to fold away: the staggered links, until the last is gone. */
+function menuCloseMs(header) {
+  const style = getComputedStyle(header);
+  // The links fold on --ease-fold, which ends cleanly, so the wait is the whole fold.
+  const fold = parseFloat(style.getPropertyValue('--fold-duration')) * 1000;
+  const stagger = parseFloat(style.getPropertyValue('--fold-stagger'));
+  if (!Number.isFinite(fold) || !Number.isFinite(stagger)) return motionMs(header);
+  // The archive's drop-down wipes in whole. The rest, the phone column included, stagger.
+  const steps = menuDrops() ? 0 : navLinks(header).length - 1;
+  return fold + stagger * steps;
+}
+
 function motionMs(header) {
   const ms = parseFloat(getComputedStyle(header).getPropertyValue('--transition-duration')) * 1000;
   return Number.isFinite(ms) ? ms : SECTION_MS;
 }
 
 let leaveGeneration = 0;
+let leftFromAbout = false;
 
 /**
  * The next page paints its nav already settled. Shrink the old link and grow
@@ -504,7 +670,9 @@ function swapClosedSection(header, from, to, generation) {
   if (outgoing) outgoing.style.setProperty('--bubble', '0');
   if (incoming) incoming.style.setProperty('--bubble', '1');
 
-  return delay(motionMs(header) + 40).then(() => {
+  // Expo-out has visually landed a little past half its length.
+  const swapMs = (parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 || 500) * 0.56;
+  return delay(swapMs + 40).then(() => {
     if (generation !== leaveGeneration || !header.isConnected) return;
     links.forEach((link) => {
       link.style.transition = 'none';
@@ -555,7 +723,10 @@ export function prepareSectionLeave(nextPathname, currentPathname = location.pat
 
   const header = document.querySelector('.site-header');
   const next = sectionHref(nextPathname);
-  const current = sectionHref(currentPathname);
+  // Leaving from About: its windows folded away with the section bubble hidden, so the
+  // next section grows in from nothing instead of the old one popping back first.
+  const current = leftFromAbout ? '' : sectionHref(currentPathname);
+  leftFromAbout = false;
   if (!header || next === current) return Promise.resolve(true);
   if (!current && !next) return Promise.resolve(true);
 
@@ -567,11 +738,19 @@ export function prepareSectionLeave(nextPathname, currentPathname = location.pat
   const project = closeHeaderProject(header);
   const section = navOpen
     ? (() => {
-        const wasSettled = header.classList.contains('is-settled');
         const drops = menuDrops();
+        if (drops) {
+          // The archive's drop-down keeps its own link in the row while it folds away,
+          // then the row changes section the way a closed menu does.
+          applyNav(false, false, current);
+          // The swap needs the drop-down fully gone (data-open off), not just visually landed.
+          const fold = parseFloat(getComputedStyle(header).getPropertyValue('--fold-duration')) * 1000 || 400;
+          return delay(fold + 60).then(() =>
+            generation === leaveGeneration ? swapClosedSection(header, current, next, generation) : null,
+          );
+        }
         applyNav(false, false, next);
-        const wait = !wasSettled || drops ? motionMs(header) : textHold + motionMs(header);
-        return delay(wait + 40);
+        return delay(menuCloseMs(header) + 40);
       })()
     : swapClosedSection(header, current, next, generation);
 
@@ -582,6 +761,9 @@ export function prepareSectionLeave(nextPathname, currentPathname = location.pat
 export function setUpHeader() {
   const header = document.querySelector('.site-header');
   if (!header) return;
+  // A section change leaves the previous page's raise mid-flight; start clean.
+  clearFooterReveal();
+  leftFromAbout = false;
 
   syncCurrentSection(header);
   alignListNav(header);
@@ -609,7 +791,6 @@ export function setUpHeader() {
     toggle?.removeAttribute('inert');
     toggle?.setAttribute('aria-expanded', 'true');
     toggle?.setAttribute('aria-label', 'Close about');
-    setToggleMark(header, false);
     const panel = aboutPanel(header);
     if (panel) {
       panel.hidden = false;
@@ -624,22 +805,38 @@ export function setUpHeader() {
     header.classList.add('is-settled');
     header.removeAttribute('data-closing');
     setLinksInert(header, false);
-    if (menuDrops()) toggle?.removeAttribute('inert');
-    else toggle?.setAttribute('inert', '');
-    setToggleMark(header, true);
+    toggle?.removeAttribute('inert');
+    // Menu stayed open across the swap: show this page's footer the same way.
+    raiseMenuFooter(header);
+    updateFooterPush();
+    bumpMenuIdle();
+    document.dispatchEvent(new CustomEvent('crystal:menu-motion'));
   } else {
     header.removeAttribute('data-open');
     header.removeAttribute('data-closing');
     header.classList.remove('is-section-swap');
     setLinksInert(header, true);
     toggle?.removeAttribute('inert');
-    setToggleMark(header, false);
   }
 }
 
+document.addEventListener('pointerover', (event) => {
+  if (!navOpen || !(event.target instanceof Element)) return;
+  if (event.target.closest('.site-header__nav, .site-header__toggle')) bumpMenuIdle();
+});
+
+document.addEventListener('focusin', (event) => {
+  if (!navOpen || !(event.target instanceof Element)) return;
+  if (event.target.closest('.site-header__nav, .site-header__toggle')) bumpMenuIdle();
+});
+
 document.addEventListener('click', (event) => {
+  if (navOpen && event.target instanceof Element && event.target.closest('.site-header__nav, .site-header__toggle')) {
+    bumpMenuIdle();
+  }
   const aboutButton = event.target.closest('[data-about-open]');
   if (aboutButton) {
+    clearMenuIdle();
     openAbout(aboutButton.matches(':focus-visible'));
     return;
   }
@@ -662,20 +859,19 @@ document.addEventListener('click', (event) => {
       closeAboutToNav(toggle.matches(':focus-visible'));
       return;
     }
-    applyNav(menuDrops() ? !navOpen : true, toggle.matches(':focus-visible'));
+    applyNav(!navOpen, toggle.matches(':focus-visible'));
     return;
   }
 
   if (aboutOpen && !event.target.closest('[data-about-panel]')) {
-    if (event.target.closest('a[href]')) {
-      dismissAbout();
-      return;
-    }
+    // A link leaves the page: page.js folds About away first (leaveAbout).
+    if (event.target.closest('a[href]')) return;
     closeAboutToNav(false);
     return;
   }
 
-  if (navOpen && !event.target.closest('.site-header')) {
+  // The footer comes up with the menu, so using it keeps the menu open.
+  if (navOpen && !event.target.closest('.site-header, .site-footer')) {
     applyNav(false, false);
   }
 });
@@ -699,6 +895,37 @@ document.addEventListener('submit', (event) => {
   window.location.href = `mailto:${email}?body=${encodeURIComponent(message)}`;
 });
 
+/** Restarts the idle close. Hover, focus or click on the menu counts as use. */
+function bumpMenuIdle() {
+  window.clearTimeout(menuIdleTimer);
+  if (!navOpen || aboutOpen) return;
+  menuIdleTimer = window.setTimeout(() => {
+    if (navOpen && !aboutOpen) applyNav(false, false);
+  }, MENU_IDLE_MS);
+}
+
+function clearMenuIdle() {
+  window.clearTimeout(menuIdleTimer);
+  menuIdleTimer = 0;
+}
+
+/** Shows the footer with the menu. The archive slides its list to the end instead, so
+    its footer arrives after the last row. */
+function raiseMenuFooter(header) {
+  if (footerIsRaised()) return;
+  if (showArchiveFooter(true)) {
+    markFooterRaised();
+    return;
+  }
+  raiseFooter(header);
+}
+
+/** Puts the footer back when the menu closes: the archive slides back to its row. */
+function lowerMenuFooter() {
+  showArchiveFooter(false);
+  lowerFooter();
+}
+
 /** Phone, header docked at the bottom: the footer pushes it up as it arrives. The
     stylesheet stops it at the middle. */
 function updateFooterPush() {
@@ -706,9 +933,12 @@ function updateFooterPush() {
   if (!header) return;
   const footer = document.querySelector('.site-footer');
   let push = 0;
-  if (phone.matches && footer?.getClientRects().length && document.body.matches(DOCKED_BOTTOM)) {
+  // Home, Work and Merch rise the footer with the menu instead of scrolling, so use where it stops.
+  const homeTop = homeFooterTop();
+  const footerTop = homeTop ?? (footer?.getClientRects().length ? footer.getBoundingClientRect().top : null);
+  if (phone.matches && footerTop !== null && document.body.matches(DOCKED_BOTTOM)) {
     const margin = parseFloat(getComputedStyle(header).getPropertyValue('--margin')) || 20;
-    push = Math.max(0, window.innerHeight - margin - footer.getBoundingClientRect().top);
+    push = Math.max(0, window.innerHeight - margin - footerTop);
   }
   header.style.setProperty('--footer-push', `${Math.round(push)}px`);
   header.toggleAttribute('data-footer', push > 0);
@@ -727,16 +957,27 @@ window.addEventListener('resize', () => {
 
 document.addEventListener('transitionend', (event) => {
   if (event.propertyName !== '--bubble') return;
-  if (!(event.target instanceof Element) || !event.target.classList.contains('site-header__link')) return;
+  // The links, or the archive's drop-down itself, which can end after them.
+  if (!(event.target instanceof Element) || !event.target.matches('.site-header__link, .site-header__nav')) return;
   const header = event.target.closest('.site-header');
   if (!header || header.classList.contains('is-section-swap')) return;
-  event.target.style.removeProperty('--bubble');
+  // The links run one after another, so the menu has settled only once the last one ends.
+  const running = bubbleTargets(header).some((target) =>
+    target.getAnimations().some(
+      (animation) => animation.transitionProperty === '--bubble' && animation.playState === 'running',
+    ),
+  );
+  if (running) return;
+  bubbleTargets(header).forEach((target) => target.style.removeProperty('--bubble'));
   if (!navOpen) header.querySelector('.site-header__nav')?.style.removeProperty('--bubble');
-  if (navOpen) header.classList.add('is-settled');
-  else {
+  if (navOpen) {
+    header.classList.add('is-settled');
+    bumpMenuIdle();
+  } else {
     header.removeAttribute('data-open');
     header.removeAttribute('data-closing');
-    setToggleMark(header, false);
+    productMenuClosed();
+    fadeViewsIn(header);
   }
   alignWorkViews(header);
 });

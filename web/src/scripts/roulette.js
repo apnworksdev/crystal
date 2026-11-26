@@ -15,7 +15,6 @@ const GLIDE_SPEED = 0.5;
 let embla;
 let root;
 let frontIndex = -1;
-let titledIndex = -1;
 let pictureObserver;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -244,17 +243,6 @@ function updateLevels(api) {
   // wide empty slide, so a fraction of a pixel of rounding opens a visible
   // seam. Measure the painted edges and pull each neighbour back to 1px.
   tightenGaps(ordered);
-
-  if (frontIndex !== titledIndex) {
-    titledIndex = frontIndex;
-    const slide = slides[frontIndex];
-    if (slide) {
-      setHeaderProject({
-        title: slide.dataset.title,
-        slug: slide.dataset.slug,
-      });
-    }
-  }
 }
 
 function onSlideClick(event) {
@@ -307,13 +295,10 @@ export function setUpRoulette() {
   pictureObserver?.disconnect();
   pictureObserver = undefined;
   frontIndex = -1;
-  titledIndex = -1;
   root = document.querySelector('[data-roulette]');
-
-  if (!root) {
-    setHeaderProject(null);
-    return;
-  }
+  // Home shows the pictures alone, so no project title sits in the header.
+  setHeaderProject(null);
+  if (!root) return;
 
   const viewport = root.querySelector('.project-roulette__viewport');
   if (!viewport) return;

@@ -23,6 +23,13 @@ export const project = defineType({
       validation: (rule) => rule.required(),
     }),
     defineField({
+      name: 'displayTitle',
+      title: 'Short title',
+      type: 'string',
+      description:
+        'Shown on the Work stack cards, at one size. Keep it short, such as "Project Hail Mary"; the full title stays in the project details. Leave empty to use the title.',
+    }),
+    defineField({
       name: 'slug',
       title: 'URL',
       type: 'slug',

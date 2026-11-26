@@ -12,6 +12,7 @@ export const isPreview = SITE_MODE === 'preview';
 // "text" covers the words inside rich text.
 const EDITABLE_FIELDS = new Set([
   'title',
+  'displayTitle',
   'brand',
   'ceremony',
   'category',
@@ -61,10 +62,10 @@ const MEDIA = `{ kind, image ${IMAGE}, poster ${IMAGE}, videoUrl }`;
 const QUERIES = {
   settings: `*[_type == "siteSettings"][0] {
     title, description, email, links[] { label, url },
-    news { enabled, items[] { _key, title, link, image ${IMAGE} } }
+    news { enabled, items[] { _key, title, link, images[] ${IMAGE}, image ${IMAGE} } }
   }`,
   projects: `*[_type == "project" && defined(slug.current)] | order(year desc, title asc) {
-    _id, title, "slug": slug.current, brand, year, time, categories, description, credits,
+    _id, title, displayTitle, "slug": slug.current, brand, year, time, categories, description, credits,
     showInWork, showInArchive, mainMedia ${MEDIA}, thumbnail ${MEDIA}
   }`,
   homeProjectIds: `*[_type == "homePage"][0].projects[]._ref`,
@@ -122,6 +123,7 @@ async function toMedia(source, aspect) {
 
 const toProject = async (project) => ({
   ...project,
+  displayTitle: project.displayTitle || project.title,
   categories: project.categories ?? [],
   description: project.description ?? [],
   credits: project.credits ?? [],
@@ -137,8 +139,14 @@ const TRANSFORMS = {
     const { news, ...rest } = stripEmpty(settings);
     const items = news?.enabled
       ? (news.items ?? [])
-          .map((item) => ({ ...item, image: toImage(item.image) }))
-          .filter((item) => item.title && item.image)
+          .map((item) => {
+            // images[] is current; a lone `image` is kept so older published items still show.
+            const images = (item.images?.length ? item.images : item.image ? [item.image] : [])
+              .map((image) => toImage(image))
+              .filter(Boolean);
+            return { _key: item._key, title: item.title, link: item.link, images };
+          })
+          .filter((item) => item.title && item.images.length)
       : [];
     return {
       ...placeholders.settings,

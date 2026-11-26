@@ -3,6 +3,7 @@ import { stegaClean } from '@sanity/client/stega';
 import ProductStrip from '../../components/ProductStrip.astro';
 import Base from '../../layouts/Base.astro';
 import { getProduct, getProducts } from '../../lib/content.js';
+import { formatPrice } from '../../lib/format.js';
 
 export async function getStaticPaths() {
   return (await getProducts()).map(({ slug }) => ({ params: { slug } }));
@@ -13,7 +14,7 @@ const product = await getProduct(Astro.params.slug);
 if (!product) return Astro.rewrite('/404');
 
 const title = stegaClean(product.title);
-const price = stegaClean(product.price);
+const price = formatPrice(stegaClean(product.price));
 const url = stegaClean(product.url);
 ---
 

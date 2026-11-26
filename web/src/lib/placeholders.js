@@ -19,6 +19,7 @@ const paragraph = (text) => ({
 const project = (id, title, brand, year, categories, picture, pages, time) => ({
   _id: id,
   title,
+  displayTitle: title,
   slug: id,
   brand,
   year,
@@ -191,8 +192,13 @@ export const settings = {
     { label: 'Youtube', url: 'https://youtube.com' },
   ],
   news: [
-    { _key: 'emmys', title: 'Crystal featured at the Emmy Awards 26', image: image('ember'), link: null },
-    { _key: 'sxsw', title: 'Live at SXSW', image: image('moss'), link: null },
+    {
+      _key: 'emmys',
+      title: 'Crystal featured at the Emmy Awards 26',
+      images: [image('ember'), image('moss')],
+      link: null,
+    },
+    { _key: 'sxsw', title: 'Live at SXSW', images: [image('moss')], link: null },
   ],
   isPlaceholder: true,
 };

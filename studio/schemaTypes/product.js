@@ -24,7 +24,7 @@ export const product = defineType({
     defineField({
       name: 'price',
       type: 'string',
-      description: 'Shown exactly as written, including the currency. For example: €35',
+      description: 'Shown as written, including the currency. A number alone gets a dollar sign: 15 shows as $15.',
       validation: (rule) => rule.required(),
     }),
     defineField({

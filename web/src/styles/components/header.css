@@ -30,7 +30,7 @@
   align-items: center;
   justify-content: center;
   height: var(--height-bubble);
-  background: var(--foreground-color);
+  background-color: var(--foreground-color);
   color: var(--background-color);
   line-height: 1;
   white-space: nowrap;
@@ -101,6 +101,7 @@
   width: calc(var(--full, 0px) * var(--bubble));
   padding-inline: 0;
   color: var(--background-color);
+  transition: --bubble var(--grow-duration) var(--ease-out);
 }
 
 /* Work page. List sits under the Work link, with Reel beside it.
@@ -126,12 +127,22 @@
   align-items: stretch;
   gap: var(--small-gap);
   z-index: 1;
+  /* Behaviour: they fade back in once the menu has folded, as they faded out. */
+  transition: opacity var(--fade-duration) var(--ease-out);
 }
 
-/* The reel menu opens in the row, so List and Reel stay visible. The nav
-   otherwise clips them until the open animation settles. */
-body:not([data-work-view='list']) .site-header__nav:has(.site-header__views:not([hidden])) {
+/* List and Stack sit under Work while the menu is closed. The nav otherwise
+   clips them until the open animation settles. */
+.site-header__nav:has(.site-header__views:not([hidden])) {
   overflow: visible;
+}
+
+/* While the section menu is open they hide, as on the client site. */
+.site-header[data-open] .site-header__views,
+.site-header[data-closing] .site-header__views {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--fade-duration) var(--ease-out);
 }
 
 .site-header__views[hidden] {
@@ -272,79 +283,22 @@ body[data-page='product'] .site-header[data-about] .site-header__product {
   display: none;
 }
 
-/* Desktop only. On a phone the menu is always a column (see the phone block at the end). */
+/* Behaviour: while the menu opens, the title stays over the Merch link and shrinks into it,
+   and the price row fades (product.js). */
+body[data-page='product'] .site-header[data-product-morph]:not([data-about]) .site-header__product-title:not([hidden]) {
+  display: flex;
+}
+
 @media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
-  /* List mode: Work and + stay in the row. List and Reel hide, and the other
-     links wipe down under Work. */
-  body[data-work-view='list'] .site-header[data-open] .site-header__views {
-    visibility: hidden;
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__toggle {
-    width: var(--height-bubble);
-    margin-left: var(--small-gap);
-    overflow: visible;
-    display: flex;
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__nav {
-    --bubble: 0;
+  body[data-page='product'] .site-header[data-product-morph]:not([data-about]) .site-header__product-title:not([hidden]) {
     position: relative;
-    width: max-content;
-    height: var(--height-bubble);
-    margin-left: var(--small-gap);
-    overflow: visible;
     z-index: 1;
-    clip-path: inset(0 -100vw calc(var(--list-nav-drop, 0px) * -1 * var(--bubble)) 0);
-    transition: --bubble var(--transition-duration) linear;
+    overflow: hidden;
   }
+}
 
-  body[data-work-view='list'] .site-header[data-open]:not([data-closing]) .site-header__nav {
-    --bubble: 1;
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__links {
-    position: relative;
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__links .site-header__link {
-    width: max-content;
-    color: var(--background-color);
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__link[aria-current='page'] {
-    position: relative;
-    padding-inline: var(--inline-gap);
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__link:not([aria-current='page']) {
-    position: absolute;
-    left: 0;
-    padding-inline: var(--gap);
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__link:nth-child(2) {
-    top: calc(1 * (var(--height-bubble) + var(--small-gap)));
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__link:nth-child(3) {
-    top: calc(2 * (var(--height-bubble) + var(--small-gap)));
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__links > .site-header__merch {
-    position: absolute;
-    left: 0;
-    top: calc(3 * (var(--height-bubble) + var(--small-gap)));
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__merch > .site-header__link {
-    position: relative;
-    padding-inline: var(--gap);
-  }
-
-  body[data-work-view='list'] .site-header[data-open] .site-header__link:nth-child(5) {
-    top: calc(4 * (var(--height-bubble) + var(--small-gap)));
-  }
+body[data-page='product'] .site-header[data-product-morph]:not([data-about]) .site-header__product:not([hidden]) {
+  display: flex;
 }
 
 .site-header__nav {
@@ -380,6 +334,26 @@ body[data-page='product'] .site-header[data-about] .site-header__product {
   --bubble: 1;
 }
 
+/* Opening and closing the menu use the shared expo-out motion. Closed section swaps keep
+   the short one above, because the next page has to paint them settled. */
+.site-header[data-open] .site-header__link {
+  transition:
+    --bubble var(--grow-duration) var(--ease-out),
+    color var(--fade-duration) var(--ease-out),
+    background-color var(--fade-duration) var(--ease-out),
+    box-shadow var(--fade-duration) var(--ease-out),
+    margin-right var(--grow-duration) var(--ease-out);
+}
+
+/* Closing folds on its own curve. Each label fades quickly as its own box starts to fold,
+   so no box is left standing empty. --close-order sets the order (right to left). */
+.site-header[data-closing] .site-header__link {
+  --close-delay: calc(var(--close-order, 0) * var(--fold-stagger));
+  transition-duration: var(--fold-duration), 0.15s, var(--fade-duration), var(--fade-duration), var(--fold-duration);
+  transition-timing-function: var(--ease-fold), var(--ease-fold), var(--ease-out), var(--ease-out), var(--ease-fold);
+  transition-delay: var(--close-delay), var(--close-delay), 0s, 0s, var(--close-delay);
+}
+
 .site-header.is-settled .site-header__link {
   color: var(--background-color);
 }
@@ -401,31 +375,18 @@ body[data-page='product'] .site-header[data-about] .site-header__product {
   display: none;
 }
 
-.site-header:not([data-open]) .site-header__toggle {
-  overflow: visible;
-  transition:
-    width var(--transition-duration) linear,
-    margin-left var(--transition-duration) linear,
-    overflow 0s linear var(--transition-duration);
+/* The + stays beside the menu and turns into an x while the menu or About is open. */
+.site-header__toggle svg {
+  transition: rotate var(--grow-duration) var(--ease-out);
+}
+
+.site-header__toggle[aria-expanded='true'] svg {
+  rotate: 45deg;
 }
 
 .site-header[data-open] .site-header__nav {
   width: max-content;
   margin-left: var(--small-gap);
-}
-
-.site-header[data-open]:not([data-closing]) .site-header__toggle {
-  width: 0;
-  margin-left: 0;
-  overflow: hidden;
-  transition: none;
-}
-
-.site-header[data-closing] .site-header__toggle {
-  overflow: hidden;
-  transition:
-    width var(--transition-duration) linear,
-    margin-left var(--transition-duration) linear;
 }
 
 
@@ -719,8 +680,9 @@ body[data-page='project'] .site-header__name[data-open] ~ .site-header__slot {
   animation: player-in 0.2s ease both;
 }
 
-/* The logo bubble stays put. The other pieces fade in once it has moved. */
+/* The logo bubble stays put. The other pieces, the section bubble included, fade in once it has moved. */
 .site-header.is-leaving .site-header__context,
+.site-header.is-leaving .site-header__nav,
 .site-header.is-leaving .site-header__toggle {
   animation: player-in 0.18s ease both;
 }
@@ -809,75 +771,6 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
   text-align: right;
 }
 
-@media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
-  body[data-page='archive'] .site-header[data-open] .site-header__toggle {
-    width: var(--height-bubble);
-    margin-left: var(--small-gap);
-    overflow: visible;
-    display: flex;
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__nav {
-    --bubble: 0;
-    position: relative;
-    width: max-content;
-    height: var(--height-bubble);
-    margin-left: var(--small-gap);
-    overflow: visible;
-    z-index: 1;
-    clip-path: inset(0 -100vw calc(var(--list-nav-drop, 0px) * -1 * var(--bubble)) 0);
-    transition: --bubble var(--transition-duration) linear;
-  }
-
-  body[data-page='archive'] .site-header[data-open]:not([data-closing]) .site-header__nav {
-    --bubble: 1;
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__links {
-    position: relative;
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__links .site-header__link {
-    width: max-content;
-    color: var(--background-color);
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__link[aria-current='page'] {
-    position: relative;
-    padding-inline: var(--inline-gap);
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__link:not([aria-current='page']) {
-    position: absolute;
-    left: 0;
-    padding-inline: var(--gap);
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__links > .site-header__work > .site-header__link {
-    top: calc(1 * (var(--height-bubble) + var(--small-gap)));
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__link:nth-child(2) {
-    top: calc(2 * (var(--height-bubble) + var(--small-gap)));
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__links > .site-header__merch {
-    position: absolute;
-    left: 0;
-    top: calc(3 * (var(--height-bubble) + var(--small-gap)));
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__merch > .site-header__link {
-    position: relative;
-    top: auto;
-    padding-inline: var(--gap);
-  }
-
-  body[data-page='archive'] .site-header[data-open] .site-header__link:nth-child(5) {
-    top: calc(4 * (var(--height-bubble) + var(--small-gap)));
-  }
-}
-
 @media (scripting: none) {
   body[data-page='archive'] .site-header:not([data-about]) {
     width: calc(100vw - var(--margin) * 2);
@@ -891,10 +784,78 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
   }
 }
 
+/* Desktop menu: the links grow one after another, left to right, and fold back right to
+   left. Each label fades in once its box is under way. Work and Archive push their
+   page content as the row widens. */
+@media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
+  .site-header__links > :nth-child(1) { --i: 0; }
+  .site-header__links > :nth-child(2) { --i: 1; }
+  .site-header__links > :nth-child(3) { --i: 2; }
+  .site-header__links > :nth-child(4) { --i: 3; }
+  .site-header__links > :nth-child(5) { --i: 4; }
+
+  .site-header[data-open]:not([data-closing]) .site-header__link {
+    color: var(--background-color);
+    transition-delay:
+      calc(var(--i, 0) * var(--stagger)),
+      calc(var(--i, 0) * var(--stagger) + var(--text-delay)),
+      0s,
+      0s;
+  }
+
+  /* Opening delays are only for the unfold. Once settled, clear them so hover
+     color and background move together (color otherwise waits --text-delay). */
+  .site-header.is-settled[data-open]:not([data-closing]) .site-header__link {
+    transition-delay: 0s;
+  }
+
+  .site-header[data-closing] .site-header__link {
+    --close-order: calc(4 - var(--i, 0));
+  }
+
+  /* The 1px between boxes belongs to each box and shrinks with it, so no gap is left over
+     to vanish at the end. */
+  .site-header__links {
+    gap: 0;
+  }
+
+  .site-header[data-open]:not([data-closing]) .site-header__links > .site-header__link:not(:last-child),
+  .site-header[data-open]:not([data-closing]) .site-header__links > :not(:last-child) .site-header__link {
+    margin-right: var(--small-gap);
+  }
+
+  /* With no current section, the gap after the logo comes and goes with the first box. */
+  .site-header__nav {
+    transition: margin-left var(--grow-duration) var(--ease-out);
+  }
+
+  .site-header[data-closing] .site-header__nav:not(:has([aria-current='page'])) {
+    margin-left: 0;
+    transition: margin-left var(--fold-duration) var(--ease-fold) calc(4 * var(--fold-stagger));
+  }
+}
+
+/* Hover shows which section opens: the box turns white with a 1px red line.
+   Use background-color (not the shorthand) so it stays in step with color. */
+@media (hover: hover) {
+  body .site-header[data-open]:not([data-closing]) .site-header__links .site-header__link:is(:hover, :focus-visible) {
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+    box-shadow: inset 0 0 0 1px var(--foreground-color);
+    outline: none;
+    transition-delay: 0s;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   body[data-page='archive'] .site-header,
   body[data-page='archive'] .site-header__columns {
     transition: none;
+  }
+
+  .site-header[data-open] .site-header__link {
+    transition-duration: 0.01s;
+    transition-delay: 0s;
   }
 }
 
@@ -918,12 +879,13 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     overflow: hidden;
   }
 
-  /* The c is the first 12.71 units of the wordmark. */
+  /* The c is the first 12.71 units at rest. --logo-c follows it while the wordmark moves,
+     so the clip stays on the c. Behaviour only: the bubble still shows just that letter. */
   .site-header__logo svg {
     flex: none;
     max-width: none;
-    margin-left: calc((var(--height-bubble) - 12.71px) / 2);
-    clip-path: inset(0 calc(100% - 12.71px) 0 0);
+    margin-left: calc((var(--height-bubble) - var(--logo-c, 12.71px)) / 2);
+    clip-path: inset(0 calc(100% - var(--logo-c, 12.71px)) 0 0);
   }
 
   .site-header .site-header__nav,
@@ -936,6 +898,8 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     width: max-content;
     margin-left: 0;
     overflow: visible;
+    /* Behaviour: follows the logo as it widens to the wordmark and back (data-footer). */
+    transition: left var(--transition-duration) linear;
   }
 
   /* The current section grows and shrinks with the others. */
@@ -955,8 +919,8 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
   }
 
   /* The open column wipes in row by row: top to bottom, or bottom to top where the
-     header is docked at the bottom. Every link runs --bubble from 0 to 1 at once;
-     --i places each one in the wipe, so a row shows once the wipe reaches it. The
+     header is docked at the bottom. Each link unfolds on its own --bubble, on the shared
+     curve, one after another (--i sets the order), so every row eases into place. The
      links keep their full width, so nothing grows sideways. */
   .site-header__links > :nth-child(1) { --i: 0; }
   .site-header__links > :nth-child(2) { --i: 1; }
@@ -966,15 +930,30 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
 
   .site-header[data-open] .site-header__links .site-header__link,
   .site-header[data-open] .site-header__links .site-header__link[aria-current='page'] {
-    --shown: clamp(0, calc(var(--bubble) * 5 - var(--i, 0)), 1);
+    --shown: var(--bubble);
+    --order: var(--i, 0);
     width: var(--full, max-content);
     color: var(--background-color);
     clip-path: inset(0 0 calc((1 - var(--shown)) * 100%) 0);
+    transition-delay: calc(var(--order) * var(--stagger)), 0s, 0s, 0s;
+  }
+
+  .site-header[data-closing] .site-header__links .site-header__link,
+  .site-header[data-closing] .site-header__links .site-header__link[aria-current='page'] {
+    --order: calc(4 - var(--i, 0));
+    --close-delay: calc(var(--order) * var(--fold-stagger));
+    transition-delay: var(--close-delay), var(--close-delay), 0s, 0s, var(--close-delay);
   }
 
   body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-open] .site-header__links .site-header__link {
-    --shown: clamp(0, calc(var(--bubble) * 5 - (4 - var(--i, 0))), 1);
+    --order: calc(4 - var(--i, 0));
     clip-path: inset(calc((1 - var(--shown)) * 100%) 0 0 0);
+  }
+
+  body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-closing] .site-header__links .site-header__link {
+    --order: var(--i, 0);
+    --close-delay: calc(var(--order) * var(--fold-stagger));
+    transition-delay: var(--close-delay), var(--close-delay), 0s, 0s, var(--close-delay);
   }
 
   /* Archive: while the menu is open, the column bar looks like a row, so the links
@@ -998,10 +977,9 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     pointer-events: none;
   }
 
-  .site-header[data-open]:not([data-closing]) .site-header__toggle {
-    width: var(--height-bubble);
-    margin-left: var(--small-gap);
-    visibility: hidden;
+  /* The column opens beside the x, so the x stays in reach to close it. */
+  .site-header[data-open] .site-header__links {
+    margin-left: calc(var(--height-bubble) + var(--small-gap));
   }
 
   /* Closed, the links are a row of zero widths, so Work and Merch sit on the
@@ -1022,14 +1000,21 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     visibility: hidden;
   }
 
+  /* Behaviour: List and Stack fade out where they were while the column opens (header.js). */
+  .site-header[data-views-fading] .site-header__views {
+    visibility: visible;
+  }
+
   body[data-page='product'] .site-header__product-title {
     position: absolute;
     top: 0;
     left: calc(var(--height-bubble) + var(--small-gap));
   }
 
+  /* Product: Crystal stays docked at the bottom; the price and Buy sit together at the
+     top of the screen, measured back from the header's row. */
   body[data-page='product'] .site-header__product {
-    top: var(--row);
+    top: calc(var(--margin) - var(--header-y, 50dvh) + var(--height-bubble) / 2);
     left: calc(-1 * (var(--height-bubble) + var(--small-gap)));
   }
 
@@ -1039,7 +1024,7 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     color: var(--background-color);
   }
 
-  /* Home: the project title sits on its own row under the header. */
+  /* A project title sits on its own row under the header. */
   .site-header__context {
     position: absolute;
     top: calc(100% + var(--small-gap));
@@ -1052,18 +1037,24 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
   }
 
   body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header:not([data-about]) {
-    /* header.js sets --footer-push as the footer comes up, until the header reaches the middle. */
-    top: max(50dvh, calc(100dvh - var(--margin) - var(--height-bubble) / 2 - var(--dock-below) - var(--footer-push, 0px)));
+    /* header.js sets --footer-push as the footer comes up, until the header reaches the middle.
+       --header-y is kept so pieces that hang elsewhere on screen can measure from it. */
+    --header-y: max(50dvh, calc(100dvh - var(--margin) - var(--height-bubble) / 2 - var(--dock-below) - var(--footer-push, 0px)));
+    top: var(--header-y);
   }
 
   /* Pushed by the footer: the whole wordmark comes back, and the rows under the
      header make way for the footer. */
-  .site-header__logo,
-  .site-header__logo svg {
+  .site-header__logo {
     transition:
       width var(--transition-duration) linear,
       margin-left var(--transition-duration) linear,
       clip-path var(--transition-duration) linear;
+  }
+
+  /* The wordmark's clip follows the moving c every frame, so it can't ease or the next letter shows. */
+  .site-header__logo svg {
+    transition: width var(--transition-duration) linear;
   }
 
   .site-header[data-footer] {
@@ -1081,10 +1072,6 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
 
   body[data-page='product'] .site-footer {
     padding-top: var(--gap);
-  }
-
-  body:is(:has([data-roulette]), [data-page='product']) .site-header:not([data-about]) {
-    --dock-below: var(--row);
   }
 
   body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header .site-header__nav {

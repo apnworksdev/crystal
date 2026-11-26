@@ -11,23 +11,40 @@ const awards = await getAwards();
   <h1 class="sr-only">Awards</h1>
   {
     awards.length > 0 ? (
-      <ul class="awards">
-        {awards.map((award) => (
-          <li class="award" tabindex="0">
-            <p class="award__text">
-              <span class="award__ceremony">{award.ceremony}</span>
-              <span class="award__category">{award.category}</span>
-              {award.work && <span class="award__work">{award.work}</span>}
-            </p>
-            {award.image && (
-              <div class="award__image">
-                <Media media={award.image} sizes="100vw" />
-              </div>
-            )}
-            <span class="award__year">{award.year}</span>
-          </li>
-        ))}
-      </ul>
+      <div class="awards-scroller" data-awards-scroller>
+        <div class="awards-scroller__track">
+          <ul class="awards">
+            {awards.map((award) => (
+              <li class="award">
+                <p class="award__text" tabindex="0">
+                  <span class="award__ceremony">{award.ceremony}</span>
+                  <span class="award__category">{award.category}</span>
+                  {award.work && <span class="award__work">{award.work}</span>}
+                </p>
+                {award.image && (
+                  <div class="award__image">
+                    <Media media={award.image} sizes="100vw" />
+                  </div>
+                )}
+                <span class="award__year">{award.year}</span>
+              </li>
+            ))}
+          </ul>
+          {/* Second copy: the scroll loop wraps by one list height. Hidden under reduced motion. */}
+          <ul class="awards" aria-hidden="true">
+            {awards.map((award) => (
+              <li class="award">
+                <p class="award__text">
+                  <span class="award__ceremony">{award.ceremony}</span>
+                  <span class="award__category">{award.category}</span>
+                  {award.work && <span class="award__work">{award.work}</span>}
+                </p>
+                <span class="award__year">{award.year}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     ) : (
       <p class="empty-message">No awards yet.</p>
     )

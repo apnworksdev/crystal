@@ -1,28 +1,64 @@
-/* The list occupies the area under the header and scrolls on its own. */
+/* The list scrolls natively behind the header bar, which sits in the middle of the
+   screen. The scroll snaps so a row always rests just under the bar, and rows that pass
+   it sit just above it instead of under it (archive.js moves them up by the bar's
+   height). The footer is the last stop, under the header. */
 
 body[data-page='archive'] {
   overflow: hidden;
+  --archive-skip: calc(var(--height-bubble) + var(--small-gap));
 }
 
 body[data-page='archive'] .site-scroll {
   display: block;
   position: fixed;
   z-index: 1;
-  top: calc(50% + var(--height-bubble) / 2);
-  right: 0;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* Behaviour: a row, or the footer, comes to rest just under the bar. */
+  scroll-snap-type: y mandatory;
+  scroll-padding-top: calc(50dvh + var(--height-bubble) / 2 + var(--small-gap));
 }
 
+body[data-page='archive'] .site-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* While the menu runs the list to its end or back, the snap waits (archive.js). */
+body[data-page='archive'] .site-scroll[data-archive-gliding] {
+  scroll-snap-type: none;
+}
+
+/* The first row starts just under the bar. */
 body[data-page='archive'] main {
+  position: relative;
   min-width: var(--archive-track, 100%);
-  padding-top: var(--small-gap);
+  padding-top: calc(50dvh + var(--height-bubble) / 2 + var(--small-gap));
+}
+
+/* Behaviour: the snap points, one per row at the row's own place, laid out like the rows.
+   The rows move to skip the bar; these never move, so the snap is never thrown off. */
+.archive__snaps {
+  position: absolute;
+  top: calc(50dvh + var(--height-bubble) / 2 + var(--small-gap));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--small-gap);
+  width: 1px;
+  pointer-events: none;
+}
+
+.archive__snap {
+  height: var(--height-bubble);
+  scroll-snap-align: start;
 }
 
 body[data-page='archive'] .site-footer {
-  min-height: 0;
+  z-index: 2;
+  scroll-snap-align: start;
+  min-height: calc(50dvh - var(--height-bubble) / 2);
   margin-left: var(--margin);
   padding-bottom: var(--big-gap);
 }
@@ -45,6 +81,10 @@ body[data-page='archive'] .site-footer {
 
 .archive__item {
   position: relative;
+  /* Behaviour: rows off screen skip layout, so resizing the columns with the menu costs the
+     same however long the list is. The height holds their place while skipped. */
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--height-bubble);
   display: grid;
   grid-template-columns: var(--archive-columns);
   column-gap: var(--gap);
@@ -91,27 +131,42 @@ body[data-page='archive'] .empty-message {
   }
 }
 
-/* Stepped list (scripts/archive.js). Once the script runs, the scroller fills the
-   screen and the list moves one row at a time: rows that pass the header sit above
-   it instead of sliding under it. Without the script the rules above still apply. */
+/* Rows that have passed the bar sit just above it.
 
-body[data-page='archive'] .site-scroll[data-archive-stepped] {
-  top: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  touch-action: pan-x;
+   Where the browser can tie an animation to the scroll (Chrome, Edge, Safari), each row
+   moves up in the very frame its top passes the bar's bottom edge. The row's view
+   timeline starts when its top enters at the bottom of the screen, so the bar's edge is
+   half a screen minus half a bar further on. Nothing runs before that point, and the move
+   holds after it.
+
+   Elsewhere (Firefox, for now) archive.js moves rows with IntersectionObservers, which
+   react a frame later: on a fast flick a row can show half under the bar for a frame. */
+@supports (animation-timeline: view()) {
+  .archive__item {
+    animation-name: archive-skip;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+
+  /* A rule of its own: the build's minifier would fold the timeline into the animation
+     shorthand, where browsers don't accept it, and drop the whole thing. */
+  .archive .archive__item {
+    animation-timeline: view();
+    animation-range: cover calc(50dvh - var(--height-bubble) / 2) cover 100%;
+  }
 }
 
-body[data-page='archive'] .site-scroll[data-archive-stepped] > * {
-  translate: 0 var(--archive-offset, 0px);
+@keyframes archive-skip {
+  from,
+  to {
+    translate: 0 calc(-1 * var(--archive-skip));
+  }
 }
 
-body[data-page='archive'] .site-scroll[data-archive-stepped] main {
-  padding-top: 0;
-}
-
-.archive__item[data-archive-before] {
-  translate: 0 calc(-1 * var(--archive-skip, 0px));
+@supports not (animation-timeline: view()) {
+  .archive__item[data-archive-before] {
+    translate: 0 calc(-1 * var(--archive-skip));
+  }
 }
 
 /* Phone: only the title and the brand, under the matching columns of the bar. */
@@ -120,7 +175,7 @@ body[data-page='archive'] .site-scroll[data-archive-stepped] main {
     min-width: 0;
   }
 
-  body[data-page='archive'] .site-scroll[data-archive-stepped] {
+  body[data-page='archive'] .site-scroll {
     overflow-x: hidden;
   }
 

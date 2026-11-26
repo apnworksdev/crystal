@@ -5,9 +5,13 @@
 // grows that bubble from "Merch" to the title, and leaving shrinks it back before the page changes.
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+// The shared expo-out (--ease-out).
+const EASING = 'cubic-bezier(0.19, 1, 0.22, 1)';
+// Same query as the phone blocks in the stylesheets.
+const phone = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)');
 
 let leaving = null;
+let morph = null;
 
 function parts() {
   return {
@@ -20,10 +24,11 @@ function parts() {
   };
 }
 
+/** --grow-duration, in milliseconds. */
 function motionMs() {
   const header = document.querySelector('.site-header');
-  const ms = header ? parseFloat(getComputedStyle(header).getPropertyValue('--transition-duration')) * 1000 : NaN;
-  return Number.isFinite(ms) ? ms : 180;
+  const ms = header ? parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 : NaN;
+  return Number.isFinite(ms) ? ms : 500;
 }
 
 /** The width of the Merch link that shares the bubble with the title. */
@@ -54,10 +59,81 @@ function growIn(title, buy) {
   if (from > 1 && Math.abs(to - from) > 1) {
     title.animate([{ width: `${from}px` }, { width: `${to}px` }], { duration: ms, easing: EASING });
   }
-  title.animate([{ color: 'transparent' }, { color: 'transparent', offset: 0.4 }, {}], { duration: ms * 1.6 });
+  title.animate([{ color: 'transparent' }, { color: 'transparent', offset: 0.36 }, {}], { duration: ms });
   if (shown(buy)) {
-    buy.animate([{ opacity: 0 }, { opacity: 0, offset: 0.4 }, { opacity: 1 }], { duration: ms * 2, easing: 'ease-out' });
+    buy.animate([{ opacity: 0 }, { opacity: 0, offset: 0.36 }, { opacity: 1 }], { duration: ms, easing: EASING });
   }
+}
+
+/** Phone: after the menu has opened, puts the fading title and price row back where they were. */
+export function pinProductMorph() {
+  morph?.pins?.forEach(({ element, box }) => {
+    const now = element.getBoundingClientRect();
+    element.style.translate = `${box.left - now.left}px ${box.top - now.top}px`;
+  });
+}
+
+function endMorph() {
+  if (!morph) return;
+  morph.pins?.forEach(({ element }) => {
+    element.style.translate = '';
+  });
+  morph.animations.forEach((animation) => animation.cancel());
+  window.clearTimeout(morph.timer);
+  morph.header.removeAttribute('data-product-morph');
+  morph = null;
+}
+
+/**
+ * The menu is opening on a product page: the title shrinks back into "Merch" and the price
+ * row fades, instead of both vanishing. The header keeps them shown (data-product-morph)
+ * until they have gone.
+ */
+export function productMenuOpening(header) {
+  endMorph();
+  const { title, buy } = parts();
+  if (!header || !title || title.hidden || reducedMotion.matches) return;
+  if (document.body.dataset.page !== 'product') return;
+  const from = title.getBoundingClientRect().width;
+  if (from < 1) return;
+  header.setAttribute('data-product-morph', '');
+  // Phone: the menu column takes the title's place, so the title and the price row fade
+  // where they are. pinProductMorph holds them there once the open menu has moved them.
+  if (phone.matches) {
+    const ms = motionMs() * 0.6;
+    const options = { duration: ms, easing: EASING, fill: 'forwards' };
+    const animations = [title.animate([{ opacity: 1 }, { opacity: 0 }], options)];
+    if (!buy.hidden) animations.push(buy.animate([{ opacity: 1 }, { opacity: 0 }], options));
+    const pins = [title, buy].map((element) => ({ element, box: element.getBoundingClientRect() }));
+    morph = { header, animations, pins, timer: window.setTimeout(endMorph, ms + 20) };
+    return;
+  }
+  const merch = title.parentElement?.querySelector(':scope > .site-header__link');
+  const to = parseFloat(merch?.style.getPropertyValue('--full')) || merchWidth(title);
+  const ms = motionMs();
+  const options = { duration: ms, easing: EASING, fill: 'forwards' };
+  const animations = [
+    title.animate([{ color: 'transparent' }, { color: 'transparent' }], options),
+    title.animate([{ width: `${from}px` }, { width: `${to}px` }], options),
+  ];
+  if (!buy.hidden) animations.push(buy.animate([{ opacity: 1 }, { opacity: 0 }], { ...options, duration: ms * 0.6 }));
+  morph = { header, animations, timer: window.setTimeout(endMorph, ms + 20) };
+}
+
+/** The menu has folded away on a product page: the title grows out of "Merch" again. */
+export function productMenuClosed() {
+  endMorph();
+  const { title, buy } = parts();
+  if (!title || title.hidden || document.body.dataset.page !== 'product') return;
+  // Two paths finish closing the menu. The title grows out once.
+  if (title.getAnimations().length) return;
+  if (phone.matches && !reducedMotion.matches) {
+    const options = { duration: motionMs(), easing: EASING };
+    title.animate([{ opacity: 0 }, { opacity: 1 }], options);
+    if (!buy.hidden) buy.animate([{ opacity: 0 }, { opacity: 1 }], options);
+    return;
+  }
+  growIn(title, buy);
 }
 
 /** Shrinks the title back to the Merch link and fades out the price row. Runs on the leaving page. */
@@ -74,8 +150,9 @@ export function leaveProduct() {
 
   const from = title.getBoundingClientRect().width;
   const to = merchWidth(title);
-  const ms = motionMs();
-  const options = { duration: ms, easing: EASING, fill: 'forwards' };
+  // The page may change once the shrink has visually landed on the expo-out curve.
+  const ms = motionMs() * 0.56;
+  const options = { duration: motionMs(), easing: EASING, fill: 'forwards' };
   const animations = [title.animate([{ color: 'transparent' }, { color: 'transparent' }], options)];
   if (to > 1) animations.push(title.animate([{ width: `${from}px` }, { width: `${to}px` }], options));
   if (shown(buy)) animations.push(buy.animate([{ opacity: 1 }, { opacity: 0 }], options));

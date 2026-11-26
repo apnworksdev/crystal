@@ -9,10 +9,6 @@ body:has([data-reel]:not([hidden])) {
   display: none;
 }
 
-body:has([data-reel]) .site-footer {
-  display: none;
-}
-
 .project-reel {
   height: 100dvh;
   overflow-y: auto;
@@ -44,7 +40,10 @@ body:has([data-reel]) .site-footer {
   line-height: var(--line-height-huge);
   letter-spacing: var(--letter-spacing-huge);
   text-align: center;
-  text-wrap: balance;
+  /* One line at one size for every project: a long title is cut, never shrunk or wrapped. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   transition: opacity 0.35s ease;
 }
 

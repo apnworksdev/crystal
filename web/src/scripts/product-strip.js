@@ -17,6 +17,8 @@ let count = 0;
 let dragX = null;
 let dragMoved = false;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+// Settling onto a picture: the shared expo-out (--ease-out, --grow-duration).
+const SETTLE_MS = 500;
 // Touch: a swipe moves one picture at most. Past this share of a step, or this fast
 // (px per ms), it goes on; otherwise it springs back. Same as the work reel.
 const SWIPE_SHARE = 0.12;
@@ -27,7 +29,9 @@ function layout() {
   const cards = [...root.querySelectorAll('[data-product-card][data-copy="1"]')];
   count = cards.length;
   const run = root.querySelector('.product-strip__run');
-  step = root.clientWidth * 0.6 || 1;
+  // Whole pixels: browsers round scrollLeft, and a fractional lap made the settle and the
+  // wrap undo each other every frame (which also kept closing the menu).
+  step = Math.round(root.clientWidth * 0.6) || 1;
   cycle = Math.max(count, 1) * step;
   if (run) run.style.width = `${cycle * 3}px`;
   return count;
@@ -120,8 +124,8 @@ function animateTo(target) {
   const started = performance.now();
   const tick = (now) => {
     if (!settling) return;
-    const t = Math.min(1, (now - started) / 320);
-    const eased = 1 - (1 - t) ** 3;
+    const t = Math.min(1, (now - started) / SETTLE_MS);
+    const eased = t >= 1 ? 1 : 1 - 2 ** (-10 * t);
     root.scrollLeft = start + delta * eased;
     if (t < 1) settleFrame = requestAnimationFrame(tick);
     else {

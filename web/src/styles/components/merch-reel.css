@@ -1,13 +1,9 @@
-/* Merch pile: every product sits in the stack. The front one is sharp.
-   Each one behind is 4px more blurred. Scrolling matches the work reel. */
+/* Merch pile: every product sits in the stack. The front one is sharp; the ones behind
+   sit higher, blurred and fainter (lib/card-stack.js). Scrolling matches the Work stack. */
 
 body:has([data-merch-reel]) {
   height: 100dvh;
   overflow: hidden;
-}
-
-body:has([data-merch-reel]) .site-footer {
-  display: none;
 }
 
 .merch-reel {

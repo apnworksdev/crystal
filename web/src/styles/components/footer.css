@@ -50,3 +50,58 @@ body[data-page='product'] .site-footer {
     padding-top: 5px;
   }
 }
+
+/* Home, Work, Merch and Awards lock the page so the footer is not
+   reachable by scroll. (Archive's footer follows its list: archive.css.) It waits just below; opening the menu lifts only the
+   footer until its top meets the header; the page content stays put.
+   footer-reveal.js measures --footer-rise from the header. */
+body:is(
+  :has([data-roulette]),
+  :has([data-merch-reel]),
+  :has([data-reel]),
+  :has([data-awards-scroller]),
+  [data-page='awards']
+) .site-footer {
+  position: fixed;
+  top: 100dvh;
+  left: 0;
+  right: 0;
+  visibility: hidden;
+  transition:
+    translate var(--grow-duration) var(--ease-out),
+    visibility 0s linear var(--grow-duration),
+    filter var(--transition-duration) linear;
+}
+
+body[data-footer-raised]:is(
+  :has([data-roulette]),
+  :has([data-merch-reel]),
+  :has([data-reel]),
+  :has([data-awards-scroller]),
+  [data-page='awards']
+) .site-footer {
+  translate: 0 calc(-1 * var(--footer-rise, 50dvh));
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* Phone: the footer pushes the docked header up to the middle in the same movement.
+   Only then: About moves the header too, and has its own motion. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  body:is(:has([data-roulette]), :has([data-merch-reel]), :not([data-work-view='list']):has([data-reel])) .site-header:not([data-about]) {
+    transition: top var(--grow-duration) var(--ease-out);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:is(
+    :has([data-roulette]),
+    :has([data-merch-reel]),
+    :has([data-reel]),
+    :has([data-awards-scroller]),
+    [data-page='awards']
+  ) .site-footer,
+  body:is(:has([data-roulette]), :has([data-merch-reel]), :not([data-work-view='list']):has([data-reel])) .site-header {
+    transition: none;
+  }
+}

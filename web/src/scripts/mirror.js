@@ -1,7 +1,9 @@
-// Mirror page. The camera is turned into a kaleidoscope with rainbow fringes by a
-// WebGL shader. Lows, mids, highs and beats each move it differently (see FEEDBACK).
+// Mirror page. The camera is shown through still fluted glass by a WebGL shader (see
+// FEEDBACK). The microphone moves only the logo (logo-motion.js), never the picture.
 // Only this page loads this file. It needs no page-transition setup, because the
 // mirror page has no router.
+
+import { setLogoMic } from './logo-motion.js';
 
 const root = document.querySelector('[data-mirror]');
 const canvas = root.querySelector('[data-mirror-canvas]');
@@ -12,7 +14,6 @@ const toggles = {
   audio: root.querySelector('[data-mirror-toggle="audio"]'),
   video: root.querySelector('[data-mirror-toggle="video"]'),
 };
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- Shaders ---------- */
 
@@ -51,29 +52,26 @@ float noise(vec2 p) {
   );
 }`;
 
-// The kaleidoscope. The screen is cut into mirrored wedges around the centre and
-// every wedge shows a fan of the camera image, sharp and in its real colours, so you
-// can still pick yourself out in the repeats. Light breaks into rainbow fringes, as it
-// does through glass: red, green and blue are each bent a little differently.
-//
-// Each part of the sound moves it its own way:
-// low (bass)    more wedges, and the rainbow splits in and out from the centre
-// mid (voice)   spins it, ripples the rings, and swirls the rainbow around the circle
-// high          the rainbow shimmers in fine, fast grains
-// beat          a rainbow ring shoots out from the centre, with a zoom, a flash and a short trail
+// Fluted glass. The screen is cut into three upright bands with gently bowed seams. Each
+// band looks at its own side of the camera (left, middle, right) through a window a
+// little wider than its third, so a face repeats across the bands, shifted, the way it
+// does behind reeded glass. The seams are soft: neighbouring bands cross-fade into each
+// other instead of meeting at a line. It depends only on the camera picture: no time, no
+// sound, so it never moves on its own.
 const FEEDBACK = `${COMMON}
 uniform sampler2D uCam;
-uniform sampler2D uPrev;
 uniform vec2 uCamRes;
-uniform float uLow;
-uniform float uMid;
-uniform float uHigh;
-uniform float uBeatAge;
-uniform float uSpin;
-uniform float uMotion;
 
-const float PI = 3.1415927;
-const float TAU = 6.2831853;
+const float BANDS = 3.0;
+// How much of the camera's width each band shows. More than a third, so they overlap.
+const float SPAN = 0.5;
+// How far each band's view sits from the middle, per band: left, middle, right.
+const float SPREAD = 0.24;
+// How much the seams bow, both outwards in the middle and inwards at the top and bottom,
+// mirrored, so the three bands each take a third of the screen on average.
+const float BOW = 0.18;
+// How wide each seam's cross-fade is, as a share of a band, on each side of the seam.
+const float SOFT = 0.15;
 
 vec3 cam(vec2 uv) {
   float s = (uRes.x / uRes.y) / (uCamRes.x / uCamRes.y);
@@ -85,81 +83,46 @@ vec3 cam(vec2 uv) {
   return texture2D(uCam, uv).rgb;
 }
 
-vec2 rotate(vec2 p, float a) {
-  float c = cos(a);
-  float s = sin(a);
-  return mat2(c, -s, s, c) * p;
-}
-
-// Screen point (centred, aspect corrected) to camera position.
-vec2 kaleido(vec2 p) {
-  float aspect = uRes.x / uRes.y;
-  float segments = 6.0 + 2.0 * floor(uLow * 3.0);
-  float wedge = TAU / segments;
-  float r = length(p);
-  float a = atan(p.y, p.x) + uSpin;
-  // Fold into one mirrored wedge: f runs 0 to 1 and back across each wedge.
-  float f = abs(mod(a, wedge) - wedge * 0.5) / (wedge * 0.5);
-  // Each wedge shows a fan of the camera that starts below the middle of the frame
-  // and points up, so a face in the middle fits inside it instead of a thin sliver.
-  float angle = PI * 0.5 + (f - 0.5) * 1.3;
-  // Rings ripple outwards with the mids.
-  r += sin(r * 14.0 - uTime * 3.0) * (0.003 + uMid * 0.035) * uMotion;
-  // Beats punch the zoom in, then it eases back.
-  float punch = exp(-uBeatAge * 6.0) * 0.18 * uMotion;
-  float zoom = 1.25 - punch + sin(uTime * 0.2) * 0.06;
-  return vec2(0.5, 0.1) + vec2(cos(angle), sin(angle)) * r * zoom * vec2(1.0 / aspect, 1.0);
+// One band's picture. across runs 0 to 1 over the band (a little past it at a seam).
+vec3 band(float k, float across, float y) {
+  float lens = across - 0.5;
+  // A gentle lens swells the middle of each band, as a glass rib does.
+  lens *= 1.0 - 0.15 * (1.0 - 4.0 * clamp(lens * lens, 0.0, 0.25));
+  float centre = 0.5 + (k - (BANDS - 1.0) * 0.5) * SPREAD;
+  return cam(vec2(centre + lens * SPAN, 0.5 + y * 0.96));
 }
 
 void main() {
-  float aspect = uRes.x / uRes.y;
-  vec2 p = (v - 0.5) * vec2(aspect, 1.0);
-  float r = length(p);
+  float y = v.y - 0.5;
+  // The seams bow away from the centre line, mirrored on both sides. 4y² - 1/3 averages
+  // zero over the height, so each band is a third of the width on average.
+  float d = (v.x - 0.5) * BANDS;
+  float x = d * (1.0 + BOW * (4.0 * y * y - 1.0 / 3.0)) + BANDS * 0.5;
+  float k = clamp(floor(x), 0.0, BANDS - 1.0);
+  float across = x - k;
+  vec3 col = band(k, across, y);
 
-  // The ring a beat sends out: it travels from the centre to the edge and fades.
-  float ringRadius = uBeatAge * 1.1;
-  float ring = exp(-pow((r - ringRadius) * 9.0, 2.0)) * max(0.0, 1.0 - uBeatAge * 1.4);
-
-  // How far apart the colours are pulled, each by its own part of the sound.
-  float radial = (0.012 + uLow * 0.05 + ring * 0.09) * uMotion;
-  float swirl = uMid * 0.1 * uMotion;
-  vec2 grain = vec2(noise(p * 40.0 + uTime * 9.0), noise(p * 40.0 - uTime * 7.0 + 5.3)) - 0.5;
-  vec2 shimmer = grain * uHigh * 0.08 * uMotion;
-
-  // Red bends least, blue most.
-  vec3 col;
-  for (int i = 0; i < 3; i++) {
-    float k = float(i) - 1.0;
-    vec2 q = rotate(p, swirl * k) * (1.0 - radial * k) + shimmer * k;
-    vec3 c = cam(kaleido(q));
-    if (i == 0) col.r = c.r;
-    else if (i == 1) col.g = c.g;
-    else col.b = c.b;
+  // Soft seams: half and half on the seam, fading to the band's own picture SOFT away.
+  if (k > 0.0 && across < SOFT) {
+    float own = 0.5 + 0.5 * smoothstep(0.0, 1.0, across / SOFT);
+    col = mix(band(k - 1.0, across + 1.0, y), col, own);
   }
-
-  // Beats leave a short, slightly zoomed trail.
-  float beat = exp(-uBeatAge * 4.0);
-  vec2 pp = (v - 0.5) * (0.99 - beat * 0.02) + 0.5;
-  vec3 prev = texture2D(uPrev, pp).rgb;
-  float keep = clamp(0.1 + beat * 0.45, 0.0, 0.6);
-  gl_FragColor = vec4(mix(col, prev, keep), 1.0);
+  if (k < BANDS - 1.0 && across > 1.0 - SOFT) {
+    float own = 0.5 + 0.5 * smoothstep(0.0, 1.0, (1.0 - across) / SOFT);
+    col = mix(band(k + 1.0, across - 1.0, y), col, own);
+  }
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
-// Light finish: a touch more contrast, a cool cast, a soft dark edge and grain.
-// Beats flash it brighter for a moment.
+// Finish: a touch more contrast and a soft dark edge. Still: no grain, no flash.
 const DISPLAY = `${COMMON}
 uniform sampler2D uTex;
-uniform float uBeatAge;
 
 void main() {
   vec3 c = texture2D(uTex, v).rgb;
-  c = (c - 0.5) * 1.1 + 0.5;
-  float l = dot(c, vec3(0.299, 0.587, 0.114));
-  c = mix(c, vec3(l) * vec3(0.92, 0.96, 1.05), 0.2);
-  c += exp(-uBeatAge * 8.0) * 0.08;
+  c = (c - 0.5) * 1.06 + 0.5;
   vec2 e = v - 0.5;
-  c *= 1.0 - dot(e, e) * 0.5;
-  c += (hash(v * uRes + fract(uTime) * 100.0) - 0.5) * 0.03;
+  c *= 1.0 - dot(e, e) * 0.35;
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -261,49 +224,6 @@ function resize() {
 let audioContext;
 let analyser;
 let audioSource;
-let bins;
-const level = { low: 0, mid: 0, high: 0, lowSlow: 0, kick: 0 };
-
-/**
- * How loud one range is, from 0 to 1. Half the average, half the loudest point, so a
- * whistle or a single note counts even though it only fills a narrow slice of the range.
- */
-function band(from, to) {
-  let sum = 0;
-  let peak = 0;
-  for (let i = from; i < to; i += 1) {
-    sum += bins[i];
-    peak = Math.max(peak, bins[i]);
-  }
-  const value = (sum / (to - from) + peak) / 2 / 255;
-  return Math.min(1, Math.max(0, (value - 0.1) / 0.7));
-}
-
-function ease(key, target) {
-  level[key] += (target - level[key]) * (target > level[key] ? 0.45 : 0.06);
-}
-
-function readAudio() {
-  if (!analyser) {
-    ease('low', 0);
-    ease('mid', 0);
-    ease('high', 0);
-    level.kick *= 0.9;
-    return;
-  }
-  analyser.getByteFrequencyData(bins);
-  // About 94 Hz per bin at 48 kHz.
-  ease('low', band(1, 4));
-  ease('mid', band(4, 32));
-  ease('high', band(32, 110));
-  level.lowSlow += (level.low - level.lowSlow) * 0.03;
-  if (level.low - level.lowSlow > 0.08) {
-    // A new beat only when the last one has faded, so one hit isn't counted twice.
-    if (level.kick < 0.5) beatAt = performance.now();
-    level.kick = 1;
-  }
-  level.kick *= 0.9;
-}
 
 /**
  * Creates and starts the audio context. Must run straight from a click: Safari keeps
@@ -321,46 +241,35 @@ function unlockAudio() {
 function connectAudio(stream) {
   unlockAudio();
   if (!audioContext) return;
+  // Only the logo listens (logo-motion.js). Same settings as a project video's sound,
+  // so both move the letters alike; fine enough to tell a low voice from a high one.
   analyser = audioContext.createAnalyser();
-  analyser.fftSize = 512;
-  analyser.smoothingTimeConstant = 0.6;
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.5;
   analyser.minDecibels = -90;
-  analyser.maxDecibels = -30;
-  bins = new Uint8Array(analyser.frequencyBinCount);
+  analyser.maxDecibels = -24;
   audioSource = audioContext.createMediaStreamSource(stream);
   audioSource.connect(analyser);
+  setLogoMic(analyser);
 }
 
 function disconnectAudio() {
   audioSource?.disconnect();
   audioSource = null;
   analyser = null;
+  setLogoMic(null);
 }
 
 /* ---------- Loop ---------- */
 
 let frame = 0;
-const start = performance.now();
-let last = start;
-let spin = 0;
-let beatAt = -Infinity;
 // The canvas fades in only once it holds a camera frame, so it never fades in black.
 let showing = false;
 
 function draw() {
   frame = requestAnimationFrame(draw);
-  readAudio();
   if (!gl || video.readyState < 2 || !video.videoWidth) return;
   resize();
-
-  const now = performance.now();
-  const time = (now - start) / 1000;
-  const delta = Math.min(0.1, (now - last) / 1000);
-  last = now;
-  const motion = reducedMotion ? 0.35 : 1;
-  spin += delta * (0.12 + level.mid * 1.8) * motion;
-  const beatAge = Math.min(10, (now - beatAt) / 1000);
-  const read = buffers[current];
   const write = buffers[1 - current];
 
   gl.activeTexture(gl.TEXTURE0);
@@ -373,18 +282,8 @@ function draw() {
   const f = feedbackProgram.uniforms;
   gl.useProgram(feedbackProgram.prog);
   gl.uniform1i(f.uCam, 0);
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, read.tex);
-  gl.uniform1i(f.uPrev, 1);
   gl.uniform2f(f.uRes, width, height);
   gl.uniform2f(f.uCamRes, video.videoWidth, video.videoHeight);
-  gl.uniform1f(f.uTime, time);
-  gl.uniform1f(f.uLow, level.low);
-  gl.uniform1f(f.uMid, level.mid);
-  gl.uniform1f(f.uHigh, level.high);
-  gl.uniform1f(f.uBeatAge, beatAge);
-  gl.uniform1f(f.uMotion, motion);
-  gl.uniform1f(f.uSpin, spin);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -393,9 +292,6 @@ function draw() {
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, write.tex);
   gl.uniform1i(d.uTex, 0);
-  gl.uniform2f(d.uRes, width, height);
-  gl.uniform1f(d.uTime, time);
-  gl.uniform1f(d.uBeatAge, beatAge);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
   current = 1 - current;
@@ -539,7 +435,31 @@ Object.entries(toggles).forEach(([kind, button]) => {
   });
 });
 
+let leaving = false;
+
+/**
+ * The way out: the buttons sink and fade (the opening animation run backwards), the
+ * camera image fades with them, then the page leaves. Resolves straight away with
+ * reduced motion.
+ */
+function playLeave() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
+  const easing = 'cubic-bezier(0.7, 0, 0.84, 0)';
+  const bar = root.querySelector('.mirror__bar');
+  const canvas = root.querySelector('[data-mirror-canvas]');
+  const fade = { duration: 350, easing, fill: 'forwards' };
+  canvas.animate([{ opacity: getComputedStyle(canvas).opacity }, { opacity: 0 }], fade);
+  const out = bar.animate([{ opacity: 1, translate: '0 0' }, { opacity: 0, translate: '0 8px' }], fade);
+  return out.finished.catch(() => {});
+}
+
 function close() {
+  if (leaving) return;
+  leaving = true;
+  playLeave().then(leave);
+}
+
+function leave() {
   stopAll();
   let sameSite = false;
   try {
@@ -562,5 +482,11 @@ document.addEventListener('visibilitychange', syncLoop);
 // Release the camera when leaving, and start clean if the page comes back from cache.
 addEventListener('pagehide', stopAll);
 addEventListener('pageshow', (event) => {
-  if (event.persisted) render();
+  if (!event.persisted) return;
+  leaving = false;
+  root.getAnimations({ subtree: true }).forEach((animation) => {
+    if (animation instanceof CSSAnimation || animation instanceof CSSTransition) return;
+    animation.cancel();
+  });
+  render();
 });

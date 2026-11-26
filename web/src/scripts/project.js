@@ -5,6 +5,7 @@ import { leaveCoverShrink, markLeave, takeEnterCover } from './cover.js';
 import { closeNav } from './header.js';
 import { headerFlip } from './header-flip.js';
 import { whenIntroDone } from './intro.js';
+import { startLogoMotion } from './logo-motion.js';
 import { createFilePlayback, createVimeoPlayback } from './playback.js';
 import { createWaveform, peaksFromMediaUrl, seededPeaks } from './waveform.js';
 
@@ -274,12 +275,14 @@ let shownPlaying = null;
 function setPlayingMarks(playing) {
   if (shownPlaying === playing) return;
   shownPlaying = playing;
+  document.querySelector('[data-project-vimeo]')?.toggleAttribute('data-playing', playing);
   document.querySelectorAll('[data-icon="play"]').forEach((icon) => {
     icon.hidden = playing;
   });
   document.querySelectorAll('[data-icon="pause"]').forEach((icon) => {
     icon.hidden = !playing;
   });
+  startLogoMotion();
 }
 
 function clearPlayerChrome(player) {

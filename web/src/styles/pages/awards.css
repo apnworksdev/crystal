@@ -1,10 +1,42 @@
-/* Visual layout for the awards page, including the hover background. */
+/* Awards: a freely scrollable column with a slow JS drift. Hover, focus or tap
+   on the award text shows its image and pauses the drift. The page is locked
+   like Work so the footer is not reachable by scroll. */
+
+body[data-page='awards'] {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.awards-scroller {
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.awards-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.awards-scroller__track {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Reduced motion: one list only, no drift (awards.js). */
+.awards-scroller:not([data-awards-loop]) .awards[aria-hidden='true'] {
+  display: none;
+}
 
 .awards {
   display: flex;
   flex-direction: column;
   gap: var(--big-gap);
-  padding: 10vh var(--margin) 15vh;
+  margin: 0;
+  padding: calc(var(--big-gap) / 2) var(--margin);
+  list-style: none;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-mono);
   font-weight: var(--font-weight-mono);
@@ -20,10 +52,12 @@
 .award__text {
   position: relative;
   z-index: 1;
-  padding-inline: var(--big-gap);
   display: inline-flex;
   flex-direction: column;
-  gap: 8px
+  gap: 8px;
+  margin: 0;
+  padding-inline: var(--big-gap);
+  cursor: default;
 }
 
 .award__ceremony,
@@ -38,16 +72,17 @@
   top: 50%;
   right: 0;
   transform: translateY(-50%);
+  pointer-events: none;
 }
 
-/* The image is the page background. It stays hidden until the award is hovered or focused. */
+/* The image is the page background. Only the text (not the empty row) reveals it. */
 .award__image {
   position: fixed;
   z-index: 0;
   inset: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--transition-duration) var(--transition-timing-function);
+  transition: opacity var(--fade-duration) var(--ease-out);
 }
 
 .award__image img {
@@ -57,27 +92,24 @@
   object-fit: cover;
 }
 
-@media (hover: hover) {
-  .award:hover .award__image,
-  .award:focus-visible .award__image {
-    opacity: 1;
-  }
+.award__text:hover ~ .award__image,
+.award__text:focus ~ .award__image,
+.award[data-active] .award__image {
+  opacity: 1;
+}
+
+.award__text:focus {
+  outline: none;
+}
+
+.award__text:focus-visible {
+  outline: 2px solid var(--foreground-color);
+  outline-offset: 4px;
 }
 
 /* Phone: no room for the side padding. */
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
   .award__text {
     padding-inline: var(--margin);
-  }
-}
-
-/* Touch screens: a tap shows the award's picture, a tap elsewhere hides it. */
-@media (hover: none) {
-  .award:focus .award__image {
-    opacity: 1;
-  }
-
-  .award:focus {
-    outline: none;
   }
 }

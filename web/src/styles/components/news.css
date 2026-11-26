@@ -1,6 +1,10 @@
 /* News: a panel beside the logo, centered on the header row. A head bar with
    the close button, then the current item's title with the arrows, then its
-   picture in a 3:4 frame. It unfolds from the header row like About. */
+   pictures. The first picture of the item sets --news-ratio (and thus the
+   window size); scrolling pictures inside the item does not. It opens like
+   About: it grows sideways out of the header row as a strip (--news-open), so
+   the menu beside it moves along instead of jumping, then unfolds up and down
+   (--news), then its contents fade in. Closing runs it backwards. */
 
 @property --news {
   syntax: '<number>';
@@ -8,25 +12,60 @@
   initial-value: 0;
 }
 
+@property --news-open {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+/* Registered so the panel can ease to a new size, such as when About opens beside it. */
+@property --news-image-h {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --news-ratio {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0.75;
+}
+
 .news-panel {
-  --news: 0;
   --news-image-h: min(64dvh, 46rem);
-  transition: --news var(--transition-duration) linear;
+  --news-ratio: 0.75;
 }
 
 .news-panel[hidden] {
   display: none;
 }
 
-.site-header[data-news] .news-panel {
-  --news: 1;
-}
-
-.site-header[data-news][data-news-closing] .news-panel {
+.news-panel[data-news-panel] {
   --news: 0;
+  --news-open: 0;
+  --news-settle: 280ms;
+  transition:
+    --news var(--grow-duration) var(--ease-out),
+    --news-open var(--grow-duration) var(--ease-out);
 }
 
-.site-header[data-news] .news-panel:not([hidden]) {
+.site-header[data-news] .news-panel[data-news-panel] {
+  --news: 1;
+  --news-open: 1;
+  transition-delay: var(--news-settle), 0s;
+}
+
+/* Closing folds on the closing curve (--ease-fold), like the menu: no slow tail. */
+.site-header[data-news][data-news-closing] .news-panel[data-news-panel] {
+  --news: 0;
+  --news-open: 0;
+  transition-duration: var(--fold-duration), var(--fold-duration);
+  transition-timing-function: var(--ease-fold), var(--ease-fold);
+  transition-delay: 0s, calc(var(--fold-duration) * 0.6);
+}
+
+.site-header[data-news] .news-panel[data-news-panel]:not([hidden]) {
+  --news-full: calc(var(--news-image-h) * var(--news-ratio) + var(--inline-gap) * 2);
   position: relative;
   z-index: 1;
   align-self: center;
@@ -34,10 +73,45 @@
   flex: none;
   flex-direction: column;
   gap: var(--small-gap);
-  width: calc(var(--news-image-h) * 3 / 4 + var(--inline-gap) * 2);
-  margin-left: var(--small-gap);
+  width: calc(var(--news-full) * var(--news-open));
+  margin-left: calc(var(--small-gap) * var(--news-open));
+  overflow: hidden;
   color: var(--background-color);
-  clip-path: inset(calc((1 - var(--news)) * 50%) 0);
+  clip-path: inset(calc((1 - var(--news)) * (50% - var(--height-bubble) / 2)) 0);
+  transition:
+    --news var(--grow-duration) var(--ease-out),
+    --news-open var(--grow-duration) var(--ease-out),
+    --news-ratio var(--fade-duration) var(--ease-out),
+    --news-image-h var(--grow-duration) var(--ease-out);
+}
+
+/* The shorthand above resets the timing, so it is set again here: opening grows sideways
+   first and unfolds once that has landed (the same beat as About), closing folds on the
+   closing curve. */
+.site-header[data-news]:not([data-news-closing]) .news-panel[data-news-panel]:not([hidden]) {
+  transition-delay: var(--news-settle), 0s, 0s, 0s;
+}
+
+.site-header[data-news][data-news-closing] .news-panel[data-news-panel]:not([hidden]) {
+  transition-duration: var(--fold-duration), var(--fold-duration), var(--fade-duration), var(--grow-duration);
+  transition-timing-function: var(--ease-fold), var(--ease-fold), var(--ease-out), var(--ease-out);
+  transition-delay: 0s, calc(var(--fold-duration) * 0.6), 0s, 0s;
+}
+
+/* The contents keep their full width while the strip grows, so nothing reflows. */
+.site-header[data-news] .news-panel[data-news-panel]:not([hidden]) > * {
+  flex: none;
+  width: var(--news-full);
+}
+
+.news-panel[data-news-panel] :is(.news-panel__head > *, .news-panel__body > *) {
+  opacity: 0;
+  transition: opacity var(--fade-duration) var(--ease-out);
+}
+
+.site-header[data-news]:not([data-news-closing]) .news-panel[data-news-panel] :is(.news-panel__head > *, .news-panel__body > *) {
+  opacity: 1;
+  transition-delay: calc(var(--news-settle) + var(--text-delay));
 }
 
 .news-panel ::selection {
@@ -125,27 +199,38 @@
   padding: 0 var(--inline-gap) var(--inline-gap);
 }
 
-/* 3:4 frame. Padding-bottom keeps the shape (older browsers lack aspect-ratio). */
+/* Frame sized to the item's first picture (--news-ratio). Pictures inside scroll. */
 .news-panel__image {
   position: relative;
   display: block;
   overflow: hidden;
+  aspect-ratio: var(--news-ratio);
 }
 
-.news-panel__image::before {
-  content: '';
-  display: block;
-  padding-bottom: 133.3333%;
+.news-panel__photos {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
 }
 
-.news-panel__image img {
-  position: absolute;
-  top: 0;
-  left: 0;
+.news-panel__photos::-webkit-scrollbar {
+  display: none;
+}
+
+.news-panel__photos img {
+  flex: none;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  scroll-snap-align: start;
 }
+
+/* About keeps this same panel beside its windows; no remount, no restyle. */
 
 /* The project page header is the player, so news waits until the visitor leaves it. */
 body[data-page='project'] .news-panel {
@@ -153,7 +238,7 @@ body[data-page='project'] .news-panel {
 }
 
 /* The archive header is the column bar, so news hangs below it instead of pushing the columns. */
-body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
+body[data-page='archive'] .site-header[data-news]:not([data-about]) .news-panel:not([hidden]) {
   position: absolute;
   top: calc(100% + var(--small-gap));
   left: 0;
@@ -163,8 +248,9 @@ body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .news-panel {
-    transition: none;
+  .news-panel,
+  .news-panel * {
+    transition: none !important;
   }
 }
 
@@ -175,7 +261,7 @@ body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
   .site-header[data-news] .news-panel:not([hidden]) {
     --news-w: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
     --news-image-h: min(
-      calc((var(--news-w) - var(--inline-gap) * 2) * 4 / 3),
+      calc((var(--news-w) - var(--inline-gap) * 2) / var(--news-ratio)),
       calc(100dvh - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2 - var(--inline-gap))
     );
     order: 1;
@@ -191,9 +277,9 @@ body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
 
   /* Archive: the bar fills the header row, so the panel sits over it, beside c and +,
      instead of hanging below it. */
-  body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
+  body[data-page='archive'] .site-header[data-news]:not([data-about]) .news-panel:not([hidden]) {
     --news-image-h: min(
-      calc((var(--news-w) - var(--inline-gap) * 2) * 4 / 3),
+      calc((var(--news-w) - var(--inline-gap) * 2) / var(--news-ratio)),
       calc(100dvh - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2 - var(--inline-gap))
     );
     top: 50%;
@@ -231,10 +317,6 @@ body[data-page='archive'] .site-header[data-news] .news-panel:not([hidden]) {
 
   .news-panel__images {
     padding: var(--inline-gap) var(--inline-gap) 0;
-  }
-
-  .site-header[data-about] .news-panel {
-    display: none;
   }
 
   /* These share the header row with the panel and would sit on top of it. */

@@ -1,7 +1,7 @@
 // Runs on the first load and again after each page transition.
 
 import { setUpArchive } from './archive.js';
-import { dismissAbout, prepareSectionLeave, setUpHeader } from './header.js';
+import { dismissAbout, leaveAbout, prepareSectionLeave, setUpHeader } from './header.js';
 import { startIntro, whenIntroDone } from './intro.js';
 import { setUpNews } from './news.js';
 import { navigate } from 'astro:transitions/client';
@@ -24,6 +24,7 @@ import {
   slideHeaderDown,
 } from './project.js';
 import { leaveProduct, setUpProduct } from './product.js';
+import { primeLogoAudio } from './logo-motion.js';
 import './mirror-trigger.js';
 
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -78,12 +79,14 @@ const pageModules = [
     '[data-reel], [data-work-list]',
     () => Promise.all([import('./reel.js'), import('./work.js')]),
     ([reel, work]) => {
-      reel.setUpReel();
+      // Work sets the view and the header inset first so the reel can measure its height.
       work.setUpWork();
+      reel.setUpReel();
     },
   ),
   pageModule('[data-merch-reel]', () => import('./merch-reel.js'), (module) => module.setUpMerchReel()),
   pageModule('[data-product-strip]', () => import('./product-strip.js'), (module) => module.setUpProductStrip()),
+  pageModule('[data-awards-scroller]', () => import('./awards.js'), (module) => module.setUpAwards()),
 ];
 
 /** Fetches the other pages' code once the browser is idle, so they open without waiting. */
@@ -95,7 +98,9 @@ function warmPageModules() {
 
 // The content fades out before a section change and back in after it.
 const FADE_OUT = 160;
-const FADE_IN = 320;
+// The new page settles on the shared expo-out (--ease-out), a little longer than a box grows.
+const FADE_IN = 600;
+const SETTLE_EASING = 'cubic-bezier(0.19, 1, 0.22, 1)';
 let contentOut = null;
 let fadeIn = false;
 let headerLeft = false;
@@ -130,7 +135,7 @@ function revealContent() {
   if (!element) return;
   element.style.opacity = '';
   if (!reducedMotion.matches) {
-    element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_IN, easing: 'ease-out' });
+    element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_IN, easing: SETTLE_EASING });
   }
 }
 
@@ -209,14 +214,20 @@ document.addEventListener('click', (event) => {
   rememberSiteClick(location.pathname);
 
   if (!plainClick(event) || (link.target && link.target !== '_self')) return;
-  if (url.pathname === location.pathname && url.search === location.search) return;
+  if (url.pathname === location.pathname && url.search === location.search) {
+    // Same page, such as the logo on Home: About still folds away.
+    leaveAbout();
+    return;
+  }
 
-  dismissAbout();
   const href = `${url.pathname}${url.search}${url.hash}`;
   const routed = Boolean(document.querySelector('[name="astro-view-transitions-enabled"]'));
   const slug = projectSlug(url.pathname);
 
   if (slug) {
+    // In the click, so a file video opened from here can be measured as well as heard.
+    primeLogoAudio();
+    dismissAbout();
     if (reducedMotion.matches) return;
     if (coverBusy()) {
       event.preventDefault();
@@ -239,9 +250,15 @@ document.addEventListener('click', (event) => {
     return;
   }
 
-  if (reducedMotion.matches) return;
+  if (reducedMotion.matches) {
+    dismissAbout();
+    return;
+  }
   event.preventDefault();
-  const header = leaveProduct().then(() => prepareSectionLeave(url.pathname));
+  // About folds away first, then the header changes section as usual.
+  const header = leaveAbout()
+    .then(() => leaveProduct())
+    .then(() => prepareSectionLeave(url.pathname));
   Promise.all([header, fadeContentOut(), fadePlayerOut()]).then(([go]) => {
     if (!go) return;
     headerLeft = true;

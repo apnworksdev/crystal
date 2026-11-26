@@ -11,3 +11,9 @@ export const CATEGORIES = [
   { value: 'games', label: 'Games' },
   { value: 'advertisement', label: 'Advertisement' },
 ];
+
+/** A price as written in the Studio. A bare number gets a dollar sign: "15" reads "$15". */
+export function formatPrice(value) {
+  const text = String(value ?? '').trim();
+  return /^\d/.test(text) ? `$${text}` : text;
+}

@@ -37,4 +37,17 @@
 
   --transition-duration: 0.25s;
   --transition-timing-function: ease;
+
+  /* Opening motion: boxes grow on a long expo-out, their text fades in once the box is
+     under way, and boxes that open together start one after another. */
+  --ease-out: cubic-bezier(0.19, 1, 0.22, 1);
+  --grow-duration: 0.5s;
+  --fade-duration: 0.3s;
+  --text-delay: 180ms;
+  --stagger: 50ms;
+  /* Closing motion: starts moving at once and ends softly, with no slow tail of a few
+     pixels. Boxes that close together follow each other closely, so none waits empty. */
+  --ease-fold: cubic-bezier(0.4, 0, 0.2, 1);
+  --fold-duration: 0.35s;
+  --fold-stagger: 30ms;
 }

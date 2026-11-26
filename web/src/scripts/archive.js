@@ -1,27 +1,34 @@
-// The archive bar and the rows share one horizontal scroll. The bar eases
-// open on arrival and shut before a section change.
+// The archive. The list is a native scroll behind the header bar, which sits in the
+// middle of the screen (archive.css). The scroll snaps so a row always rests just under
+// the bar. Rows that pass the bar sit just above it instead of under it. Where the browser
+// supports scroll-driven animations, the stylesheet does that in step with the scroll.
+// Elsewhere two IntersectionObservers move each row up by the bar's height as it crosses,
+// and back down when it returns.
 //
-// Vertically the list steps instead of scrolling: one row per step, and the
-// row that passes the bar jumps to sit right above it. Wheel, touch and keys
-// move a row index; nothing scrolls natively on the vertical axis.
+// The bar and the rows share one horizontal scroll. The bar eases open on arrival and
+// shut before a section change. Opening the menu runs the list to its end, where the
+// footer rests under the header; closing runs it back to the row it was on. The list
+// does not track the bar while the menu is open — that was the lag.
 
 let scrollEl = null;
 let headerEl = null;
 let observer = null;
 let rows = [];
-let current = 0;
-let offset = 0;
-let wheelRest = 0;
-let touchY = null;
-// Touch momentum: the finger's speed when it lifts keeps stepping rows, slowing down
-// until it stops. Speed is in px per ms; FRICTION is how much is kept per 16 ms.
-let lastY = 0;
-let lastT = 0;
-let speed = 0;
-let coastFrame = 0;
-const FRICTION = 0.95;
-const MIN_SPEED = 0.05;
+let layoutFrame = 0;
+let lastAlign = '';
+/** Rows below the bar: they move up once their top passes it. */
+let below = null;
+/** Rows moved above the bar: they move back once their own place is below it again. */
+let above = null;
+let watchedHeight = 0;
+/** True while the columns fold away with the menu (foldColumns). */
+let folding = false;
+/** Where the menu found the list, while the menu has run it to its end. */
+let menuReturn = null;
+let glide = null;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+// Browsers that can tie an animation to the scroll move the rows in CSS, in the same frame.
+const scrollDriven = typeof CSS !== 'undefined' && CSS.supports('animation-timeline: view()');
 
 /**
  * Where the bar's columns sit once the bar is fully open. While it eases open the
@@ -40,6 +47,8 @@ function openLayout(header, columns) {
   const still = [header, columns];
   const width = header.style.width;
   const wasOpen = header.classList.contains('is-archive-open');
+  // Put back whatever was set inline, such as a fold in progress, not just ''.
+  const transitions = still.map((element) => element.style.transition);
   still.forEach((element) => {
     element.style.transition = 'none';
   });
@@ -49,8 +58,8 @@ function openLayout(header, columns) {
   header.classList.toggle('is-archive-open', wasOpen);
   header.style.width = width;
   header.offsetWidth;
-  still.forEach((element) => {
-    element.style.transition = '';
+  still.forEach((element, index) => {
+    element.style.transition = transitions[index];
   });
   return layout;
 }
@@ -60,174 +69,236 @@ function align() {
   const scroll = scrollEl;
   const columns = header?.querySelector('[data-archive-columns]');
   if (!header || !scroll || !columns) return;
+  // Measuring switches the bar's transition off for a moment, which would cut a running
+  // open, close or fold short. Those measure once they have finished instead.
+  if (endTween || folding) return;
+  // About hides the bar. Measuring it then would resize the header, fire the observer
+  // again and loop every frame until About closes.
+  if (header.hasAttribute('data-about')) return;
+  // Menu open: leave the list alone. Resizing it with the shrinking columns was the lag.
+  if (header.hasAttribute('data-open')) return;
 
   const { inset, width, track } = openLayout(header, columns);
-  scroll.style.setProperty('--archive-inset', `${inset}px`);
-  scroll.style.setProperty('--archive-columns-width', `${width}px`);
-  scroll.style.setProperty('--archive-track', `${track}px`);
+  const key = `${Math.round(inset)}|${Math.round(width)}|${Math.round(track)}`;
+  if (key === lastAlign) return;
+  lastAlign = key;
+  scroll.style.setProperty('--archive-inset', `${Math.round(inset)}px`);
+  scroll.style.setProperty('--archive-columns-width', `${Math.round(width)}px`);
+  scroll.style.setProperty('--archive-track', `${Math.round(track)}px`);
 }
+
+let lastShift = '';
 
 function onScroll() {
   if (!headerEl || !scrollEl) return;
-  headerEl.style.setProperty('--archive-shift', `${scrollEl.scrollLeft}px`);
-  // Focus can still nudge the hidden vertical axis. Keep it at the top.
-  if (scrollEl.scrollTop) scrollEl.scrollTop = 0;
+  // Vertical glides fire scroll too; only the sideways offset moves the bar.
+  const shift = `${scrollEl.scrollLeft}px`;
+  if (shift === lastShift) return;
+  lastShift = shift;
+  headerEl.style.setProperty('--archive-shift', shift);
 }
 
-/** Distance from one row to the next. */
-function pitch() {
-  if (rows.length > 1) return rows[1].offsetTop - rows[0].offsetTop;
-  return rows[0]?.offsetHeight || 1;
+/* ---------- Rows passing the bar ---------- */
+
+/**
+ * The bar's bottom edge, measured from the top of the scroller. The bar sits in the
+ * middle of the screen, so this follows the height alone.
+ */
+function barLine() {
+  const bar = headerEl?.offsetHeight || 24;
+  return scrollEl.clientHeight / 2 + bar / 2;
 }
 
-/** Puts the current row right under the bar and earlier rows right above it. */
-function place() {
-  if (!scrollEl || !headerEl || !rows.length) return;
-  const list = rows[0].parentElement;
-  const gap = parseFloat(getComputedStyle(list).rowGap) || 0;
-  const barHeight = headerEl.offsetHeight;
-  const barBottom = window.innerHeight / 2 + barHeight / 2;
-  const naturalTop = list.getBoundingClientRect().top - offset;
-  // Past the last row every row sits above the bar, so the slot under it is one row further on.
-  const slot = current < rows.length ? rows[current].offsetTop : rows.at(-1).offsetTop + pitch();
-  const rowTop = naturalTop + slot - rows[0].offsetTop;
-
-  offset = barBottom + gap - rowTop;
-  scrollEl.style.setProperty('--archive-offset', `${offset}px`);
-  scrollEl.style.setProperty('--archive-skip', `${barHeight + gap}px`);
-  rows.forEach((row, index) => row.toggleAttribute('data-archive-before', index < current));
+function skip() {
+  return parseFloat(getComputedStyle(document.body).getPropertyValue('--archive-skip')) || 25;
 }
 
-function go(index) {
-  // rows.length is the end: every row above the bar, none below.
-  const next = Math.max(0, Math.min(rows.length, index));
-  if (next === current) return false;
-  current = next;
-  place();
-  return true;
+// A region from far above the screen down to `line`: a row intersects it once its top
+// is above the line. Far to the sides too, so a row scrolled sideways still counts.
+function region(line) {
+  const height = scrollEl.clientHeight;
+  return `100000px 100000px ${-Math.max(0, Math.round(height - line))}px 100000px`;
 }
 
-/** True when the stepped list should take vertical input. */
-function stepping() {
-  return (
-    document.body.dataset.page === 'archive' &&
-    Boolean(scrollEl && rows.length) &&
-    !headerEl?.hasAttribute('data-about') &&
-    !document.querySelector('dialog[open]')
+function onBelow(entries) {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    below.unobserve(entry.target);
+    entry.target.setAttribute('data-archive-before', '');
+    above.observe(entry.target);
+  }
+}
+
+function onAbove(entries) {
+  for (const entry of entries) {
+    if (entry.isIntersecting) continue;
+    above.unobserve(entry.target);
+    entry.target.removeAttribute('data-archive-before');
+    below.observe(entry.target);
+  }
+}
+
+/**
+ * Two watchers, so a row never flips back and forth at the line. A row below the bar
+ * moves up as soon as its top passes the bar. A moved row sits a bar's height higher,
+ * so it is watched against a line a bar's height higher: it moves back only once its own
+ * place is below the bar again.
+ */
+function watchRows() {
+  below?.disconnect();
+  above?.disconnect();
+  below = null;
+  above = null;
+  if (!scrollEl || !rows.length || typeof IntersectionObserver === 'undefined') return;
+  // The stylesheet ties the move to the scroll itself where the browser can (archive.css).
+  if (scrollDriven) return;
+  watchedHeight = scrollEl.clientHeight;
+  const line = barLine();
+  below = new IntersectionObserver(onBelow, { root: scrollEl, rootMargin: region(line), threshold: 0 });
+  above = new IntersectionObserver(onAbove, { root: scrollEl, rootMargin: region(line - skip()), threshold: 0 });
+  rows.forEach((row) => {
+    if (row.hasAttribute('data-archive-before')) above.observe(row);
+    else below.observe(row);
+  });
+}
+
+/* ---------- The menu runs the list to the footer ---------- */
+
+const easeOut = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
+
+function stopGlide() {
+  if (!glide) return;
+  cancelAnimationFrame(glide.frame);
+  window.clearTimeout(glide.timer);
+  const el = glide.el;
+  glide = null;
+  // The rows that crossed the bar are updated a frame later. Snap again after that, so
+  // the snap sees them where they belong.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      if (!glide) el.removeAttribute('data-archive-gliding');
+    }),
   );
 }
 
-function onWheel(event) {
-  if (!stepping() || event.ctrlKey) return;
-  if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-  event.preventDefault();
-
-  // A mouse wheel notch moves exactly one row. Browsers report notches in lines,
-  // or as multiples of 120 in the legacy wheelDeltaY. Trackpads report small pixel
-  // deltas, which add up to a row per row height of travel.
-  const legacy = event.wheelDeltaY;
-  if (event.deltaMode !== 0 || (legacy && legacy % 120 === 0)) {
-    wheelRest = 0;
-    go(current + Math.sign(event.deltaY));
+/** Scrolls to `to` on the shared curve. The snap waits until it lands. */
+function glideTo(to) {
+  stopGlide();
+  const el = scrollEl;
+  const from = el.scrollTop;
+  if (reducedMotion.matches || Math.abs(to - from) < 1) {
+    el.scrollTop = to;
     return;
   }
-
-  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-  wheelRest += event.deltaY * unit;
-  const size = pitch();
-  const steps = Math.trunc(wheelRest / size);
-  if (!steps) return;
-  wheelRest -= steps * size;
-  if (!go(current + steps)) wheelRest = 0;
-}
-
-function stopCoast() {
-  cancelAnimationFrame(coastFrame);
-  coastFrame = 0;
-}
-
-function onTouchStart(event) {
-  stopCoast();
-  touchY = stepping() && event.touches.length === 1 ? event.touches[0].clientY : null;
-  lastY = touchY ?? 0;
-  lastT = event.timeStamp;
-  speed = 0;
-}
-
-function onTouchMove(event) {
-  if (touchY === null || !stepping()) return;
-  const y = event.touches[0].clientY;
-  const dt = event.timeStamp - lastT;
-  if (dt > 0) {
-    // Smoothed, so one jittery event does not decide the throw.
-    speed = speed * 0.4 + ((lastY - y) / dt) * 0.6;
-    lastY = y;
-    lastT = event.timeStamp;
-  }
-  const size = pitch();
-  const steps = Math.trunc((touchY - y) / size);
-  if (!steps) return;
-  touchY -= steps * size;
-  if (!go(current + steps)) touchY = y;
-}
-
-/** Keeps stepping after the finger lifts, slower and slower. */
-function onTouchEnd(event) {
-  if (touchY === null) return;
-  touchY = null;
-  // A finger that stopped before lifting throws nothing.
-  if (event.timeStamp - lastT > 100 || Math.abs(speed) < MIN_SPEED || reducedMotion.matches) return;
-  let velocity = speed;
-  let travel = 0;
-  let previous = performance.now();
-  const coast = (now) => {
-    if (!stepping()) return stopCoast();
-    const dt = Math.min(now - previous, 50);
-    previous = now;
-    travel += velocity * dt;
-    velocity *= FRICTION ** (dt / 16);
-    const size = pitch();
-    const steps = Math.trunc(travel / size);
-    if (steps) {
-      travel -= steps * size;
-      if (!go(current + steps)) return stopCoast();
-    }
-    if (Math.abs(velocity) < MIN_SPEED) return stopCoast();
-    coastFrame = requestAnimationFrame(coast);
+  const duration = parseFloat(getComputedStyle(el).getPropertyValue('--grow-duration')) * 1000 || 500;
+  el.setAttribute('data-archive-gliding', '');
+  const start = performance.now();
+  const state = { el, frame: 0, timer: 0 };
+  const land = () => {
+    el.scrollTop = to;
+    if (glide === state) stopGlide();
   };
-  coastFrame = requestAnimationFrame(coast);
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / duration);
+    el.scrollTop = from + (to - from) * easeOut(t);
+    if (t < 1) state.frame = requestAnimationFrame(tick);
+    else land();
+  };
+  state.frame = requestAnimationFrame(tick);
+  // A background tab never runs frames. Land there anyway.
+  state.timer = window.setTimeout(land, duration + 200);
+  glide = state;
 }
+
+/** Where the footer rests under the header. */
+function footerStop() {
+  const footer = scrollEl.querySelector('.site-footer');
+  if (!footer) return scrollEl.scrollHeight - scrollEl.clientHeight;
+  const top = footer.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
+  const pad = parseFloat(getComputedStyle(scrollEl).scrollPaddingTop) || 0;
+  return Math.min(scrollEl.scrollHeight - scrollEl.clientHeight, Math.max(0, top - pad));
+}
+
+/**
+ * Opening the menu runs the list to its end, every row passing the bar, so the footer
+ * comes up under the header like the bottom of any page. Closing runs it back to the
+ * row the menu found. Returns false when there is no archive list to move.
+ */
+export function showArchiveFooter(show) {
+  if (document.body.dataset.page !== 'archive' || !scrollEl || !rows.length) return false;
+  if (show) {
+    if (menuReturn === null) menuReturn = scrollEl.scrollTop;
+    glideTo(footerStop());
+    return true;
+  }
+  if (menuReturn === null) return true;
+  const back = menuReturn;
+  menuReturn = null;
+  glideTo(back);
+  return true;
+}
+
+// Scrolling by hand while the menu has the footer up: closing leaves the list there.
+function onUserScroll() {
+  if (glide) stopGlide();
+  menuReturn = null;
+}
+
+/* ---------- Keys ---------- */
 
 function onKeyDown(event) {
-  if (!stepping() || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (document.body.dataset.page !== 'archive' || !scrollEl || !rows.length) return;
+  if (event.altKey || event.ctrlKey || event.metaKey || headerEl?.hasAttribute('data-about')) return;
   const target = event.target;
-  if (target instanceof HTMLElement && target.closest('input, textarea, select, button, [contenteditable]')) return;
-
-  const page = Math.max(1, Math.floor(window.innerHeight / 2 / pitch()) - 1);
-  const moves = {
-    ArrowDown: 1,
-    ArrowUp: -1,
-    PageDown: page,
-    PageUp: -page,
-    ' ': event.shiftKey ? -page : page,
-    Home: -rows.length,
-    End: rows.length,
-  };
+  if (target instanceof HTMLElement && target.closest('input, textarea, select, button, a, [contenteditable]')) return;
+  const pitch = rows.length > 1 ? rows[1].offsetTop - rows[0].offsetTop : skip();
+  const page = Math.max(1, Math.floor(scrollEl.clientHeight / 2 / pitch) - 1) * pitch;
+  const moves = { ArrowDown: pitch, ArrowUp: -pitch, PageDown: page, PageUp: -page, ' ': event.shiftKey ? -page : page };
+  if (event.key === 'Home' || event.key === 'End') {
+    event.preventDefault();
+    scrollEl.scrollTo({ top: event.key === 'Home' ? 0 : footerStop(), behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+    return;
+  }
   if (!(event.key in moves)) return;
   event.preventDefault();
-  go(current + moves[event.key]);
+  scrollEl.scrollBy({ top: moves[event.key], behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+}
+
+/* ---------- Layout ---------- */
+
+function scheduleLayout() {
+  if (layoutFrame) return;
+  layoutFrame = requestAnimationFrame(() => {
+    layoutFrame = 0;
+    if (document.body.dataset.page !== 'archive') return;
+    align();
+    // The bar's line moves with the height, so the watchers need it again.
+    if (scrollEl && scrollEl.clientHeight !== watchedHeight) watchRows();
+  });
 }
 
 function detach() {
+  stopGlide();
+  folding = false;
+  menuReturn = null;
   scrollEl?.removeEventListener('scroll', onScroll);
+  scrollEl?.removeEventListener('wheel', onUserScroll);
+  scrollEl?.removeEventListener('touchstart', onUserScroll);
   observer?.disconnect();
   observer = null;
-  window.removeEventListener('wheel', onWheel);
+  below?.disconnect();
+  above?.disconnect();
+  below = null;
+  above = null;
+  if (layoutFrame) cancelAnimationFrame(layoutFrame);
+  layoutFrame = 0;
+  lastAlign = '';
+  lastShift = '';
   scrollEl = null;
   rows = [];
-  touchY = null;
-  stopCoast();
 }
+
+/* ---------- The bar ---------- */
 
 /**
  * The bar's width goes between max-content and a length, which CSS cannot animate.
@@ -262,6 +333,7 @@ function tweenWidth(header, open) {
     window.clearTimeout(timer);
     header.style.width = '';
     endTween = null;
+    if (header.isConnected && document.body.dataset.page === 'archive') align();
   };
   endTween = done;
   const onEnd = (event) => {
@@ -296,29 +368,76 @@ export function setUpArchive() {
   }
 
   scrollEl = document.querySelector('[data-archive-scroll]');
-  scrollEl?.addEventListener('scroll', onScroll, { passive: true });
-  // Not passive, so it can step rows. Only added here, so other pages keep smooth native scrolling.
-  window.addEventListener('wheel', onWheel, { passive: false });
+  if (scrollEl) {
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    scrollEl.addEventListener('wheel', onUserScroll, { passive: true });
+    scrollEl.addEventListener('touchstart', onUserScroll, { passive: true });
+    scrollEl.scrollTop = 0;
+  }
   rows = scrollEl ? [...scrollEl.querySelectorAll('.archive__item')] : [];
-  current = 0;
-  offset = 0;
-  wheelRest = 0;
-  if (rows.length) scrollEl.setAttribute('data-archive-stepped', '');
+  rows.forEach((row) => row.removeAttribute('data-archive-before'));
 
   const columns = headerEl.querySelector('[data-archive-columns]');
   if (columns && typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(() => {
-      align();
-      place();
+      // Skip while the menu is open: the columns shrink, but the list stays put.
+      if (headerEl?.hasAttribute('data-open') || glide) return;
+      scheduleLayout();
     });
     observer.observe(columns);
     observer.observe(headerEl);
-    if (rows.length) observer.observe(rows[0].parentElement);
+    if (scrollEl) observer.observe(scrollEl);
   }
   align();
-  place();
+  watchRows();
   rows[0]?.parentElement.setAttribute('data-archive-ready', '');
   easeOpen(headerEl);
+}
+
+/** After About closes on the archive: the bar eases open again, as on arrival. */
+export function reopenArchiveBar() {
+  if (document.body.dataset.page !== 'archive' || !headerEl?.isConnected) return;
+  if (headerEl.classList.contains('is-archive-open')) return;
+  easeOpen(headerEl);
+}
+
+/**
+ * Leaving with the menu open: the menu is folding at the same time, so a tween towards a
+ * width measured now would miss. Instead the columns are pinned at their width and shrink
+ * to nothing on the closing curve; the header simply follows its contents.
+ */
+function foldColumns(header) {
+  const columns = header.querySelector('[data-archive-columns]');
+  if (!columns) {
+    header.classList.remove('is-archive-open');
+    return Promise.resolve();
+  }
+  endTween?.();
+  const width = columns.getBoundingClientRect().width;
+  const style = getComputedStyle(header);
+  const fold = parseFloat(style.getPropertyValue('--fold-duration')) * 1000 || 350;
+  const ease = style.getPropertyValue('--ease-fold').trim() || 'ease';
+  // Pinned as they are, labels included, while the bar's closed styles take over.
+  folding = true;
+  columns.style.transition = 'none';
+  columns.style.flex = `0 0 ${width}px`;
+  columns.style.minWidth = '0px';
+  columns.style.opacity = '1';
+  header.classList.remove('is-archive-open');
+  columns.offsetWidth;
+  columns.style.transition = `flex-basis ${fold}ms ${ease}, padding-inline ${fold}ms ${ease}, opacity ${fold}ms ${ease}`;
+  columns.style.flexBasis = '0px';
+  columns.style.opacity = '0';
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      columns.style.transition = '';
+      columns.style.flex = '';
+      columns.style.minWidth = '';
+      columns.style.opacity = '';
+      folding = false;
+      resolve();
+    }, fold + 40);
+  });
 }
 
 /** Shrinks the archive bar back to the small header before the next page. */
@@ -334,6 +453,8 @@ export function collapseArchive() {
     header.classList.remove('is-archive-open');
     return Promise.resolve();
   }
+  // The page change doesn't wait for this (it folds alongside the menu); About does.
+  if (header.hasAttribute('data-open')) return foldColumns(header);
   tweenWidth(header, false);
 
   const ms = parseFloat(getComputedStyle(header).getPropertyValue('--transition-duration')) * 1000;
@@ -344,14 +465,7 @@ export function collapseArchive() {
 
 window.addEventListener('resize', () => {
   if (document.body.dataset.page !== 'archive') return;
-  align();
-  place();
+  scheduleLayout();
 });
 
-// Registered once. Each handler checks that the archive is the current page.
-// The wheel handler is the exception: setUpArchive adds it and detach removes it.
-window.addEventListener('touchstart', onTouchStart, { passive: true });
-window.addEventListener('touchmove', onTouchMove, { passive: true });
-window.addEventListener('touchend', onTouchEnd, { passive: true });
-window.addEventListener('touchcancel', onTouchEnd, { passive: true });
 window.addEventListener('keydown', onKeyDown);

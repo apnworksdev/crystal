@@ -12,7 +12,8 @@ const stillFor = (media) => {
 const cards = projects.map((project) => ({
   slug: stegaClean(project.slug),
   brand: stegaClean(project.brand) ?? '',
-  title: stegaClean(project.title) ?? '',
+  // The short title keeps every card at one size. The full title stays in the project details.
+  title: stegaClean(project.displayTitle ?? project.title) ?? '',
   still: stillFor(project.thumbnail),
 }));
 const first = cards[0];

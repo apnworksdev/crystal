@@ -1,7 +1,12 @@
-/* About replaces the open nav. The wordmark and + stay on the header
-   row. The copy is a full-height column beside the wordmark. The team sits
-   centered on that row, as tall as its members, and never taller than six
-   and a half of them. */
+/* About replaces the open nav. The wordmark and x stay on the header
+   row. About opens into a row of windows: the copy and the team, centered on
+   that row, as tall as its members and never taller than six and a half of them.
+   News is the same header panel as the popup; it sits beside these windows and
+   keeps its own size and motion.
+
+   Opening: the row grows sideways out of the menu as a strip the height of the
+   header (--about-w), then the windows unfold up and down from it (--about),
+   then their contents fade in. Closing runs it backwards. */
 
 @property --about {
   syntax: '<number>';
@@ -9,9 +14,20 @@
   initial-value: 0;
 }
 
+@property --about-w {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
 .about-panel {
   --about: 0;
-  transition: --about var(--transition-duration) linear;
+  --about-w: 0;
+  /* When the sideways growth has visually landed on the expo-out curve. */
+  --about-settle: 280ms;
+  transition:
+    --about var(--grow-duration) var(--ease-out),
+    --about-w var(--grow-duration) var(--ease-out);
 }
 
 .about-panel[hidden] {
@@ -20,10 +36,29 @@
 
 .site-header[data-about] .about-panel {
   --about: 1;
+  --about-w: 1;
+  transition-delay: var(--about-settle), 0s;
 }
 
+/* Closing folds on the closing curve (--ease-fold), like the menu: no slow tail. */
 .site-header[data-about][data-about-closing] .about-panel {
   --about: 0;
+  /* Narrows exactly to the menu's width (header.js sets --about-w-end), so it ends there. */
+  --about-w: var(--about-w-end, 0);
+  transition-duration: var(--fold-duration), var(--fold-duration);
+  transition-timing-function: var(--ease-fold), var(--ease-fold);
+  transition-delay: 0s, calc(var(--fold-duration) * 0.6);
+}
+
+/* The contents fade in once the windows are unfolding, and out as soon as they close. */
+.about-panel :is(.about-panel__head > *, .about-panel__body > *, .team__list) {
+  opacity: 0;
+  transition: opacity var(--fade-duration) var(--ease-out);
+}
+
+.site-header[data-about]:not([data-about-closing]) .about-panel :is(.about-panel__head > *, .about-panel__body > *, .team__list) {
+  opacity: 1;
+  transition-delay: calc(var(--about-settle) + var(--text-delay));
 }
 
 .site-header[data-about] {
@@ -36,10 +71,25 @@
   pointer-events: none;
 }
 
+/* Desktop, News open beside About: News gets a share of the width and the About columns
+   give it up, so the whole row, x included, fits the screen. News sizes its picture to
+   that share. */
+@media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
+  .site-header[data-about][data-news] {
+    --about-news-room: min(26vw, 22rem);
+    --about-col: min(22rem, calc((100vw - var(--margin) * 2 - 8rem - var(--about-news-room)) / 2));
+  }
+
+  body .site-header[data-about][data-news] .news-panel[data-news-panel]:not([hidden]) {
+    --news-image-h: min(64dvh, 46rem, calc((var(--about-news-room) - var(--inline-gap) * 2) / var(--news-ratio, 0.75)));
+  }
+}
+
 .site-header[data-about] .site-header__logo,
 .site-header[data-about] .site-header__toggle,
 .site-header[data-about] .about-panel__copy,
-.site-header[data-about] .about-panel__team {
+.site-header[data-about] .about-panel__team,
+.site-header[data-about] .news-panel {
   pointer-events: auto;
 }
 
@@ -84,13 +134,18 @@
   align-self: center;
   display: flex;
   align-items: center;
-  width: calc(var(--about-col) * 2 + var(--small-gap));
+  /* --about-from: the open menu's width (header.js), so the menu turns into the windows. */
+  width: max(
+    var(--about-from, 0px),
+    calc((var(--about-col) * 2 + var(--small-gap)) * var(--about-w))
+  );
   height: calc(100dvh - var(--margin) * 2);
   min-width: 0;
   margin-left: var(--small-gap);
   overflow: hidden;
-  /* Full size from the first frame, then uncovered from the header row. */
-  clip-path: inset(calc((1 - var(--about)) * 50%) 0);
+  /* Full size from the first frame. A header-high strip at first, then uncovered
+     up and down from the header row. */
+  clip-path: inset(calc((1 - var(--about)) * (50% - var(--height-bubble) / 2)) 0);
   pointer-events: none;
   gap: var(--small-gap);
 }
@@ -320,9 +375,10 @@ main,
 
 @media (prefers-reduced-motion: reduce) {
   .about-panel,
+  .about-panel *,
   main,
   .site-footer {
-    transition: none;
+    transition: none !important;
   }
 }
 
@@ -336,20 +392,86 @@ main,
    turns in it; the head bar holds the About and Team tabs and the close. The
    open tab is the outlined one. */
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .site-header[data-about] {
+    --about-phone-w: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
+  }
+
   .site-header[data-about] .site-header__toggle {
     order: 0;
   }
 
   .site-header[data-about] .about-panel:not([hidden]) {
     flex-direction: column;
-    align-items: stretch;
-    width: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
+    align-items: flex-start;
+    width: calc(var(--about-phone-w) * var(--about-w));
+  }
+
+  /* Each view keeps its full width while the panel grows, so nothing reflows. */
+  .site-header[data-about] .about-panel > * {
+    width: var(--about-phone-w);
   }
 
   .about-panel__copy {
     flex: 1 1 auto;
-    width: auto;
     height: auto;
+  }
+
+  /* News tab: grid puts the shared panel under the about head in the middle column. */
+  .site-header[data-about]:has(.about-panel[data-about-view='news']) {
+    display: grid;
+    grid-template-columns: var(--height-bubble) minmax(0, 1fr) var(--height-bubble);
+    grid-template-rows: auto auto;
+    column-gap: var(--small-gap);
+    align-items: start;
+    align-content: center;
+  }
+
+  .site-header[data-about]:has(.about-panel[data-about-view='news']) .site-header__logo {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .site-header[data-about]:has(.about-panel[data-about-view='news']) .site-header__toggle {
+    grid-column: 3;
+    grid-row: 1;
+    order: unset;
+    margin-left: 0;
+  }
+
+  .site-header[data-about]:has(.about-panel[data-about-view='news']) .about-panel:not([hidden]) {
+    grid-column: 2;
+    grid-row: 1;
+    flex: none;
+    width: 100%;
+    height: auto;
+    margin-left: 0;
+  }
+
+  .site-header[data-about][data-news]:has(.about-panel[data-about-view='news']) .news-panel[data-news-panel]:not([hidden]) {
+    --news-w: var(--about-phone-w);
+    --news-image-h: min(
+      calc((var(--news-w) - var(--inline-gap) * 2) / var(--news-ratio)),
+      calc(100dvh - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2 - var(--inline-gap))
+    );
+    grid-column: 2;
+    grid-row: 2;
+    align-self: stretch;
+    min-height: 0;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .site-header[data-about]:has(.about-panel[data-about-view='news']) .news-panel .news-panel__head {
+    display: none;
+  }
+
+  .site-header[data-about][data-news]:has(.about-panel:not([data-about-view='news'])) .news-panel[data-news-panel],
+  .about-panel[data-about-view='news'] .about-panel__body {
+    display: none;
+  }
+
+  .about-panel[data-about-view='news'] .about-panel__copy {
+    flex: none;
   }
 
   .about-panel__head:has(.about-panel__tabs) {
@@ -413,9 +535,8 @@ main,
   }
 
   .about-panel__team {
-    --team-w: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
+    --team-w: var(--about-phone-w);
     flex: 1 1 auto;
-    width: auto;
     max-height: none;
   }
 

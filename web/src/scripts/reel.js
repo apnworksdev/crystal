@@ -1,14 +1,14 @@
-// Work reel. The picture in front is sharp. The next one sits behind it,
-// a little blurred. Scrolling fades the front one, blurs it and grows it
-// a little in place, and the next one comes forward. The words leave as soon as scrolling
-// starts and return when a picture has settled. The sequence loops.
+// Work stack. The picture in front is sharp; the ones behind sit higher, blurred and
+// fainter (lib/card-stack.js). Scrolling moves through the pile: the next picture comes
+// forward while the front one leaves. The words leave as soon as scrolling starts and
+// return when a picture has settled. The sequence loops.
 
+import { cardStackStyle, depthOf } from '../lib/card-stack.js';
 import { closeNav } from './header.js';
 
-const NEXT_BLUR = 8;
-const NEXT_SCALE = 1.07;
-// How much bigger the leaving picture gets by the time it has gone.
-const LEAVE_SCALE = 1.08;
+// Settling onto a picture: the shared expo-out (--ease-out, --grow-duration).
+const SETTLE_MS = 500;
+const easeOut = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
 
 let root;
 let wordsFor = -1;
@@ -34,7 +34,9 @@ function cards() {
 function layout() {
   const count = cards().length;
   const run = root.querySelector('.project-reel__run');
-  step = root.clientHeight * 0.7 || 1;
+  // Whole pixels: browsers round scrollTop, and a fractional lap can make the settle and
+  // the wrap undo each other every frame.
+  step = Math.round(root.clientHeight * 0.7) || 1;
   cycle = Math.max(count, 1) * step;
   if (run) run.style.height = `${cycle * 3}px`;
   return count;
@@ -52,40 +54,16 @@ function wrap() {
   wrapping = false;
 }
 
-function place(card, { opacity, blur, scale, shift, z, active }) {
+function place(card, { opacity, blur, scale, y, z, active }) {
   card.style.visibility = opacity < 0.01 ? 'hidden' : 'visible';
   card.style.opacity = opacity.toFixed(3);
   card.style.filter = blur > 0.4 ? `blur(${blur.toFixed(2)}px)` : 'none';
-  card.style.transform = `translate(-50%, -50%) translateY(${shift.toFixed(2)}%) scale(${scale.toFixed(4)})`;
+  card.style.transform = `translate(-50%, -50%) translateY(${y.toFixed(2)}px) scale(${scale.toFixed(4)})`;
   card.style.zIndex = String(z);
   card.style.pointerEvents = active ? '' : 'none';
   card.tabIndex = active ? 0 : -1;
   if (active) card.removeAttribute('aria-hidden');
   else card.setAttribute('aria-hidden', 'true');
-}
-
-function slotStyle(slot, local) {
-  if (slot === 0) {
-    // It stays in place: fades, blurs and grows a little as it goes.
-    const leave = local * local;
-    return {
-      opacity: 1 - leave,
-      blur: leave * 10,
-      scale: reducedMotion.matches ? 1 : 1 + (LEAVE_SCALE - 1) * local,
-      shift: 0,
-      z: 3,
-    };
-  }
-  if (slot === 1) {
-    return {
-      opacity: 1,
-      blur: NEXT_BLUR * (1 - local),
-      scale: NEXT_SCALE + (1 - NEXT_SCALE) * local,
-      shift: 0,
-      z: 2,
-    };
-  }
-  return { opacity: Math.max(0, (local - 0.35) / 0.65), blur: NEXT_BLUR, scale: NEXT_SCALE, shift: 0, z: 1 };
 }
 
 function hideWords() {
@@ -128,18 +106,11 @@ function paint() {
   }
 
   const activeIndex = local >= 0.5 ? (index + 1) % count : index;
-  const used = new Set();
-
-  for (let slot = 0; slot < 3; slot += 1) {
-    const i = (index + slot) % count;
-    if (used.has(i)) continue;
-    used.add(i);
-    const style = slotStyle(slot, local);
-    place(list[i], { ...style, active: i === activeIndex && style.opacity > 0.4 });
-  }
+  const position = index + local;
 
   list.forEach((card, i) => {
-    if (!used.has(i)) place(card, { opacity: 0, blur: 0, scale: 1, shift: 0, z: 0, active: false });
+    const style = cardStackStyle(depthOf(i, position, count), reducedMotion.matches, count);
+    place(card, { ...style, active: i === activeIndex && style.opacity > 0.4 });
   });
 
   // A fraction of a pixel can leave the scroll just short of the next picture.
@@ -201,8 +172,8 @@ function animateTo(target) {
   const started = performance.now();
   const tick = (now) => {
     if (!settling) return;
-    const t = Math.min(1, (now - started) / 320);
-    const eased = 1 - (1 - t) ** 3;
+    const t = Math.min(1, (now - started) / SETTLE_MS);
+    const eased = easeOut(t);
     root.scrollTop = start + delta * eased;
     if (t < 1) settleFrame = requestAnimationFrame(tick);
     else {
@@ -355,10 +326,6 @@ export function setUpReel() {
   }
 
   if (views) views.hidden = false;
-  layout();
-  wrapping = true;
-  root.scrollTop = cycle;
-  wrapping = false;
   root.addEventListener('scroll', onScroll, { passive: true });
   root.addEventListener('scrollend', onScrollEnd);
   root.addEventListener('wheel', onWheel, { passive: true });
@@ -367,7 +334,23 @@ export function setUpReel() {
   root.addEventListener('pointermove', onTouchMove, { passive: true });
   root.addEventListener('pointerup', onTouchUp);
   root.addEventListener('pointercancel', onTouchUp);
-  paint();
+
+  // Wait until the reel has a real height (page fade / inset can leave 0 for a frame),
+  // then park on the middle copy so arrival from another page lands cleanly.
+  const place = () => {
+    if (!root?.isConnected) return;
+    if (root.clientHeight === 0) {
+      requestAnimationFrame(place);
+      return;
+    }
+    layout();
+    wrapping = true;
+    root.scrollTop = cycle;
+    wrapping = false;
+    paint();
+  };
+  place();
+  requestAnimationFrame(() => requestAnimationFrame(place));
 }
 
 document.addEventListener('keydown', onKeyDown);

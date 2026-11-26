@@ -34,9 +34,18 @@ const NAV = [
 ];
 const isCurrent = (href) => path === href || path.startsWith(`${href}/`);
 const onWork = path === '/work' || path === '/work/';
+const onAwards = path === '/awards' || path === '/awards/';
 const onArchive = path === '/archive' || path === '/archive/';
-const usesMono = player || onWork || onArchive || isCurrent('/awards');
-const pageKind = player ? 'project' : product ? 'product' : onArchive ? 'archive' : undefined;
+const usesMono = player || onWork || onArchive || onAwards;
+const pageKind = player
+  ? 'project'
+  : product
+    ? 'product'
+    : onArchive
+      ? 'archive'
+      : onAwards
+        ? 'awards'
+        : undefined;
 ---
 
 <!doctype html>
@@ -58,7 +67,9 @@ const pageKind = player ? 'project' : product ? 'product' : onArchive ? 'archive
     <script is:inline>
       (function () {
         var root = document.documentElement;
-        if (root.dataset.introState) return;
+        /* Page transitions can run this again. Only a real page load decides. */
+        if (root.dataset.introState || window.__introDecided) return;
+        window.__introDecided = true;
 
         var reduce = false;
         try {
@@ -68,6 +79,11 @@ const pageKind = player ? 'project' : product ? 'product' : onArchive ? 'archive
         var replay = false;
         try {
           replay = new URLSearchParams(window.location.search).has('intro');
+        } catch (e) {}
+        /* Reloading the home page plays it again. */
+        try {
+          var nav = performance.getEntriesByType('navigation')[0];
+          if (nav && nav.type === 'reload' && window.location.pathname === '/') replay = true;
         } catch (e) {}
 
         var seen = false;
@@ -197,7 +213,7 @@ const pageKind = player ? 'project' : product ? 'product' : onArchive ? 'archive
                       List
                     </button>
                     <button class="site-header__view" type="button" data-view="reel" aria-pressed="true">
-                      Reel
+                      Stack
                     </button>
                   </div>
                 </div>
@@ -232,9 +248,6 @@ const pageKind = player ? 'project' : product ? 'product' : onArchive ? 'archive
           <svg data-header-plus viewBox="0 0 15 15" aria-hidden="true">
             <path d="M7.75098 7.25H15.001L15 7.75H7.75098V15H7.25098V7.75H0L0.000976562 7.25H7.25098V0H7.75098V7.25Z" fill="#D9D9D9"></path>
           </svg>
-          <svg data-header-minus viewBox="0 0 15 15" hidden aria-hidden="true">
-            <path d="M0.000976562 7.25H15.001L15 7.75H0Z" fill="#D9D9D9"></path>
-          </svg>
         </span>
       </button>
       <div class="site-header__columns" data-archive-columns>
@@ -244,7 +257,7 @@ const pageKind = player ? 'project' : product ? 'product' : onArchive ? 'archive
         <span>Year</span>
         <span>Time</span>
       </div>
-      <AboutPanel about={about} email={settings.email} />
+      <AboutPanel about={about} email={settings.email} news={settings.news ?? []} />
     </header>
     <script is:inline set:html={headerFlipClassic}></script>
     <script is:inline>

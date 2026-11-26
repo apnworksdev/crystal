@@ -44,6 +44,20 @@ _Avoid_: award, festival, show
 The piece named on an award.
 _Avoid_: project
 
+**Awards page**:
+The page that lists awards in a drifting, freely scrollable column. Hover or focus on an award's text shows its image and pauses the drift.
+_Avoid_: awards list, recognition page
+
+### News
+
+**News**:
+The short updates shown in the header window (and again inside About).
+_Avoid_: popup, announcement, banner
+
+**News item**:
+One update in News: a title, one or more pictures, and an optional link on the title.
+_Avoid_: post, story, slide
+
 ### Merch
 
 **Product**:

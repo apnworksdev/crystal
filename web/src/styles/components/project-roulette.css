@@ -101,6 +101,3 @@
   }
 }
 
-body:has([data-roulette]) .site-footer {
-  display: none;
-}

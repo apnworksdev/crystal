@@ -4,26 +4,36 @@ import Media from './Media.astro';
 import { richTextToHtml } from '../lib/format.js';
 import '../styles/components/about.css';
 
-const { about, email } = Astro.props;
+// News lives in the header as one panel (NewsPanel). About only needs to know whether
+// a News tab exists on phone; desktop shows that same panel beside these windows.
+const { about, email, news = [] } = Astro.props;
 const html = richTextToHtml(about?.content);
 const address = stegaClean(email ?? '');
 const team = about?.team ?? [];
+const hasNews = news.length > 0;
 ---
 
 <div class="about-panel" id="about-panel" data-about-panel hidden inert role="region" aria-labelledby="about-title">
   <div class="about-panel__copy">
     <div class="about-panel__head">
       <h2 class="about-panel__title" id="about-title">About</h2>
-      {/* Phone only: the copy and the team take turns in the panel. */}
+      {/* Phone only: the copy, the team, and the shared news panel take turns. */}
       {
-        team.length > 0 && (
+        (team.length > 0 || hasNews) && (
           <div class="about-panel__tabs">
             <button class="about-panel__tab" type="button" data-about-tab="about" aria-pressed="true">
               About
             </button>
-            <button class="about-panel__tab" type="button" data-about-tab="team" aria-pressed="false">
-              Team
-            </button>
+            {team.length > 0 && (
+              <button class="about-panel__tab" type="button" data-about-tab="team" aria-pressed="false">
+                Team
+              </button>
+            )}
+            {hasNews && (
+              <button class="about-panel__tab" type="button" data-about-tab="news" aria-pressed="false">
+                News
+              </button>
+            )}
           </div>
         )
       }

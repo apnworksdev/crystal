@@ -1,16 +1,16 @@
 // Three quick clicks on the header logo open the hidden mirror page, with a short
-// transition (playEnter).
+// transition (playEnter), straight from whatever page they are on.
 //
 // On the home page the logo does nothing on its own (it would only reload the page),
-// so every click there just counts. On other pages the first click goes home as usual,
-// later clicks are swallowed so they don't start more navigations, and a third click
-// leaves a note so the mirror opens as soon as the home page has arrived.
+// so every click there just counts. On other pages a click waits a moment (DECIDE_MS)
+// before going home, so a second and third click can still turn it into the mirror.
+// A single click goes home as usual once the wait is over.
 // The count lives in sessionStorage, so it survives full page loads in preview mode.
 
 const WINDOW_MS = 700;
+// How long a click on another page waits for the next one before it goes home.
+const DECIDE_MS = 320;
 const COUNT_KEY = 'mirror-clicks';
-const PENDING_KEY = 'mirror-pending';
-const PENDING_MS = 5000;
 
 let memory = { count: 0, at: 0 };
 
@@ -110,7 +110,6 @@ function openMirror() {
   opening = true;
   memory = { count: 0, at: 0 };
   write(COUNT_KEY, null);
-  write(PENDING_KEY, null);
   playEnter().then(() => location.assign('/mirror'));
 }
 
@@ -122,36 +121,40 @@ addEventListener('pageshow', (event) => {
   document.querySelectorAll('.mirror-enter').forEach((element) => element.remove());
 });
 
-function openIfPending() {
-  const at = Number(read(PENDING_KEY));
-  if (!at) return;
-  write(PENDING_KEY, null);
-  if (onHome() && Date.now() - at < PENDING_MS) openMirror();
-}
+let goHome = 0;
+// The click this script lets through to the page router once the wait is over.
+let passing = false;
 
 document.addEventListener(
   'click',
   (event) => {
+    if (passing) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    if (!event.target.closest?.('.site-header__logo')) return;
+    const logo = event.target.closest?.('.site-header__logo');
+    if (!logo) return;
 
-    const count = countClick();
-
-    if (onHome()) {
-      // Capture phase, so this runs before the page router sees the click.
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (count >= 3) openMirror();
-      return;
-    }
-
-    if (count < 2) return;
+    // Capture phase, so this runs before the page router sees the click.
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (count >= 3) write(PENDING_KEY, String(Date.now()));
+    const count = countClick();
+    window.clearTimeout(goHome);
+
+    if (count >= 3) {
+      openMirror();
+      return;
+    }
+    if (onHome()) return;
+
+    // Wait for a next click. If none comes, go home the usual way.
+    goHome = window.setTimeout(() => {
+      if (opening || !logo.isConnected) return;
+      passing = true;
+      try {
+        logo.click();
+      } finally {
+        passing = false;
+      }
+    }, DECIDE_MS);
   },
   true,
 );
-
-openIfPending();
-document.addEventListener('astro:after-swap', openIfPending);

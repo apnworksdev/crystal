@@ -41,10 +41,11 @@ lib/          data and helpers, no browser code
   video.js        turns Vimeo or MP4 links into embed data
   format.js       rich text to HTML, the category list
   pages.js        which projects get a page
-  merch-stack.js  card positions for the merch reel
+  card-stack.js   card positions for the Work stack and the merch pile
 pages/        one file per route
 preview/      code that only exists in preview mode (draft-mode route, session check, click-to-edit)
-scripts/      browser code (page.js: video autoplay, click-to-load Vimeo player; news.js: the news panel)
+scripts/      browser code (page.js: video autoplay, click-to-load Vimeo player; news.js: the news panel;
+              footer-reveal.js: Home's footer rising with the menu)
 styles/       see below
 ```
 
@@ -58,7 +59,7 @@ styles/       see below
   browser is idle. Add new single-page code there instead of importing it at the top of `page.js`.
 - **Tests** sit next to the file they test (`pages.js` → `pages.test.js`) and use Node's built-in runner, with no
   extra packages. Run `npm test` at the root, or in `web/` or `studio/`. Keep logic worth testing in plain
-  functions that don't touch the DOM, as `lib/merch-stack.js` does.
+  functions that don't touch the DOM, as `lib/card-stack.js` does.
 - **Imports need a matching dependency.** Anything a file imports must be listed in its own `package.json`, even when
   another package already installs it (`vite` in `web/`, `rxjs` in `studio/`).
 - **Non-passive `wheel` or `touchmove` listeners** make every scroll wait for JavaScript. Add them only while their
@@ -86,8 +87,12 @@ web/src/styles/
 - **Never** create an index file that imports every stylesheet. It would send all the CSS to every page.
 - **`globals.css` is shared across projects.** Put project-specific base styles in `main.css` instead.
 - **Phone layout** uses one query, `(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)`, at the end of each
-  stylesheet that needs it. `header.js` repeats it as `phone`. Change all of them together. The desktop-only
-  dropping menus (archive, Work list) are wrapped in the negated query in `header.css`.
+  stylesheet that needs it. `header.js` repeats it as `phone`. Change all of them together. Desktop menus open
+  sideways in the header row (including Work and Archive); the phone column menu is wrapped in that query in
+  `header.css`.
+- **Opening motion** (menu, About, Home footer, stacks, page reveal) shares one curve: `--ease-out`,
+  `--grow-duration`, `--fade-duration`, `--text-delay` and `--stagger` in `variables.css`. Scripts that animate
+  by hand use the same expo-out. Reuse these instead of new timings.
 - **Utility classes come from `globals.css`:** `.sr-only` (visually hidden, still read by screen readers) and
   `.hidden`.
 
@@ -110,7 +115,7 @@ web/src/styles/
 | `site-header` | Base layout | `__logo`, `__nav`, `__link`, `__merch`, `__product-title`, `__product`, `__price`, `__buy` |
 | `site-footer` | Base layout | `__link` |
 | `media` | Media.astro (no wrapper element) | `__image`, `__poster`, `__video`, `__play`, `__loop`, `__player` |
-| `news-panel` | NewsPanel.astro, in the header beside the logo | `__head`, `__title`, `__close`, `__body`, `__bar`, `__titles`, `__item-title`, `__arrows`, `__arrow`, `__images`, `__image` |
+| `news-panel` | NewsPanel.astro, in the header beside the logo. The same element stays open beside About (no second copy) | `__head`, `__title`, `__close`, `__body`, `__bar`, `__titles`, `__item-title`, `__arrows`, `__arrow`, `__images`, `__image` |
 | `intro` | Base layout, the opening plate on first arrival | `__plate` |
 | `site-scroll` | Base layout, the scrolling area around the page content | none |
 | `project-cover` | Created by `cover.js`: the black layer that opens and closes a project | none |
@@ -118,7 +123,7 @@ web/src/styles/
 | `project-reel` | ProjectReel.astro, on /work | `__stage`, `__stack`, `__card`, `__run`, `__brand`, `__title` |
 | `work-list` | ProjectList.astro, the Work list on /work. Styled in `project-list.css` | `__head`, `__title`, `__filters`, `__filter`, `__layout`, `__table`, `__rows`, `__row`, `__brand`, `__panel`, `__still`, `__empty` |
 | `project` | projects/[slug] | `__header`, `__title`, `__meta`, `__media`, `__body`, `__description`, `__credits`, `__credit`, `__credit-label`, `__credit-value` |
-| `archive` | archive | `__item`, `__index`, `__title`, `__brand`, `__year`, `__time` |
+| `archive` | archive. A native snapping scroll; rows that pass the bar move above it (`archive.js`) | `__item`, `__index`, `__title`, `__brand`, `__year`, `__time`, `__snaps`, `__snap` (invisible snap points, one per row, that never move) |
 | `awards`, `award` | awards | `award__text`, `__ceremony`, `__category`, `__work`, `__image`, `__year` |
 | `merch-reel` | merch page | `__stage`, `__stack`, `__card`, `__run` |
 | `product-strip` | product page | `__stage`, `__track`, `__card`, `__run` |
@@ -145,7 +150,7 @@ web/src/styles/
 | `award` | Documents | `ceremony`, `category`, `work`, `year`, `image` |
 | `product` | Documents | `title`, `price` (a string with currency), `url`, `images` |
 | `aboutPage` | Single document | `content` (rich text) and a `team` array. Shown in the header About panel |
-| `siteSettings` | Single document | Site name, SEO description, email, social links, `news` (items with a title, image and optional link). Opens in the header a few seconds after arrival; closing it lasts until a new tab |
+| `siteSettings` | Single document | Site name, SEO description, email, social links, `news` (items with a title, one or more images and an optional title link). Opens in the header a few seconds after arrival; closing it lasts until a new tab |
 | `media` | Object | `kind` is `video` or `image`. Videos are links (`videoUrl`): Vimeo, or a direct MP4 |
 | `richText` | Array | Paragraphs, bold, italic and links only |
 

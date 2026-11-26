@@ -1,9 +1,13 @@
-// Merch pile. Every product stays in the stack. The front one is sharp.
-// Each one behind is 4px more blurred and 10% bigger; four show at once.
-// Scrolling matches the work reel.
+// Merch pile. Every product stays in the stack. The front one is sharp; the ones behind
+// sit higher, blurred and fainter, and keep that depth as they come forward. Same stack as
+// the Work page (lib/card-stack.js).
 
-import { merchStackStyle } from '../lib/merch-stack.js';
+import { cardStackStyle, depthOf } from '../lib/card-stack.js';
 import { closeNav } from './header.js';
+
+// Settling onto a product: the shared expo-out (--ease-out, --grow-duration).
+const SETTLE_MS = 500;
+const easeOut = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
 
 let root;
 let frame = 0;
@@ -40,12 +44,11 @@ function wrap() {
   wrapping = false;
 }
 
-function place(card, { opacity, blur, shift, scale = 1, z, active }) {
+function place(card, { opacity, blur, y, scale = 1, z, active }) {
   card.style.visibility = opacity < 0.01 ? 'hidden' : 'visible';
   card.style.opacity = opacity.toFixed(3);
   card.style.filter = blur > 0.4 ? `blur(${blur.toFixed(2)}px)` : 'none';
-  const lift = reducedMotion.matches ? 0 : shift;
-  card.style.transform = `translate(-50%, -50%) translateY(${lift.toFixed(2)}%) scale(${scale.toFixed(4)})`;
+  card.style.transform = `translate(-50%, -50%) translateY(${y.toFixed(2)}px) scale(${scale.toFixed(4)})`;
   card.style.zIndex = String(z);
   card.style.pointerEvents = active ? '' : 'none';
   card.tabIndex = active ? 0 : -1;
@@ -74,22 +77,11 @@ function paint() {
   }
 
   const activeIndex = local >= 0.5 ? (index + 1) % count : index;
-  const used = new Set();
-
-  for (let slot = 0; slot < count; slot += 1) {
-    const i = (index + slot) % count;
-    if (used.has(i)) continue;
-    used.add(i);
-    const style = merchStackStyle(slot, local);
-    place(list[i], {
-      ...style,
-      z: count - slot,
-      active: i === activeIndex && style.opacity > 0.4,
-    });
-  }
+  const position = index + local;
 
   list.forEach((card, i) => {
-    if (!used.has(i)) place(card, { opacity: 0, blur: 0, shift: 0, z: 0, active: false });
+    const style = cardStackStyle(depthOf(i, position, count), reducedMotion.matches, count);
+    place(card, { ...style, active: i === activeIndex && style.opacity > 0.4 });
   });
 }
 
@@ -148,8 +140,8 @@ function animateTo(target) {
   const started = performance.now();
   const tick = (now) => {
     if (!settling) return;
-    const t = Math.min(1, (now - started) / 320);
-    const eased = 1 - (1 - t) ** 3;
+    const t = Math.min(1, (now - started) / SETTLE_MS);
+    const eased = easeOut(t);
     root.scrollTop = start + delta * eased;
     if (t < 1) settleFrame = requestAnimationFrame(tick);
     else {

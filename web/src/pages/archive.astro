@@ -10,17 +10,24 @@ const projects = await getArchiveProjects();
   <h1 class="sr-only">Archive</h1>
   {
     projects.length > 0 ? (
-      <ol class="archive">
-        {projects.map((project, index) => (
-          <li class="archive__item">
-            <span class="archive__index">{String(index + 1).padStart(3, '0')}</span>
-            <span class="archive__title">{project.title}</span>
-            <span class="archive__brand">{project.brand}</span>
-            <span class="archive__year">{project.year}</span>
-            <span class="archive__time">{project.time}</span>
-          </li>
-        ))}
-      </ol>
+      <Fragment>
+        <ol class="archive">
+          {projects.map((project, index) => (
+            <li class="archive__item">
+              <span class="archive__index">{String(index + 1).padStart(3, '0')}</span>
+              <span class="archive__title">{project.title}</span>
+              <span class="archive__brand">{project.brand}</span>
+              <span class="archive__year">{project.year}</span>
+              <span class="archive__time">{project.time}</span>
+            </li>
+          ))}
+        </ol>
+        {/* Snap points, one per row at its own place. The rows move to skip the bar, so the
+            scroll snaps to these instead, which never move. */}
+        <div class="archive__snaps" aria-hidden="true">
+          {projects.map(() => <div class="archive__snap" />)}
+        </div>
+      </Fragment>
     ) : (
       <p class="empty-message">No projects yet.</p>
     )
