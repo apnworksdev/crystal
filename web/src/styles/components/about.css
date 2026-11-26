@@ -339,8 +339,9 @@
   gap: 0.65rem;
   padding: 0.45rem 0.45rem 0.4rem;
   /* Behaviour: hidden, the card does not scroll, so a swipe over a photo scrolls the
-     team list instead of an invisible card. Shown, a long text scrolls inside it and
-     stops at its ends instead of carrying on into the list. */
+     team list instead of an invisible card. Shown, a long text scrolls inside it, then
+     the scroll carries on into the list. (Containing it there stopped the list from
+     scrolling at all over a photo whose text fits.) */
   overflow: hidden;
   background: var(--background-color);
   color: var(--foreground-color);
@@ -351,7 +352,6 @@
 .team-member:hover .team-member__card,
 .team-member:focus-within .team-member__card {
   overflow-y: auto;
-  overscroll-behavior: contain;
   opacity: 1;
 }
 
@@ -533,7 +533,6 @@ main,
 @media (hover: none) {
   .team-member__image:focus .team-member__card {
     overflow-y: auto;
-    overscroll-behavior: contain;
     opacity: 1;
   }
 
