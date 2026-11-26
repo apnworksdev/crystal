@@ -12,6 +12,8 @@ import {
   raiseFooter,
 } from './footer-reveal.js';
 import { pinProductMorph, productMenuClosed, productMenuOpening } from './product.js';
+// Dragging the bottom edge of the About, Team and News windows (wires itself up once).
+import './box-resize.js';
 
 let navOpen = false;
 let aboutOpen = false;
@@ -199,8 +201,6 @@ function applyNav(open, moveFocus, currentHref) {
   if (open) {
     // On a phone the menu column would cover the news, so opening it closes the news.
     if (phone.matches) dismissNews();
-    raiseMenuFooter(header);
-    updateFooterPush();
     // Idle close starts once the menu has settled (transitionend), not mid-open.
     clearMenuIdle();
     // Work list follows the growing menu so the gap stays one pixel.
@@ -211,6 +211,9 @@ function applyNav(open, moveFocus, currentHref) {
     productMenuOpening(header);
     const fadeViews = fadeViewsOut(header);
     header.setAttribute('data-open', '');
+    // After data-open, so a phone's open column is laid out and the footer stops under it.
+    raiseMenuFooter(header);
+    updateFooterPush();
     pinProductMorph();
     fadeViews?.();
     setLinksInert(header, false);
@@ -830,6 +833,31 @@ document.addEventListener('focusin', (event) => {
   if (event.target.closest('.site-header__nav, .site-header__toggle')) bumpMenuIdle();
 });
 
+// While the menu opens, each link is wiped in with a clip, and a clip also trims where
+// the link can be tapped. A quick tap then lands on the links' container instead. Hand
+// it to the link whose full box is under the finger, so an early tap still works.
+document.addEventListener(
+  'click',
+  (event) => {
+    if (!navOpen || !(event.target instanceof Element) || !event.target.matches('.site-header__links')) return;
+    const link = [...event.target.querySelectorAll('.site-header__link')].find((candidate) => {
+      const box = candidate.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        event.clientX >= box.left &&
+        event.clientX <= box.right &&
+        event.clientY >= box.top &&
+        event.clientY <= box.bottom
+      );
+    });
+    if (!link) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    link.click();
+  },
+  true,
+);
+
 document.addEventListener('click', (event) => {
   if (navOpen && event.target instanceof Element && event.target.closest('.site-header__nav, .site-header__toggle')) {
     bumpMenuIdle();
@@ -863,7 +891,8 @@ document.addEventListener('click', (event) => {
     return;
   }
 
-  if (aboutOpen && !event.target.closest('[data-about-panel]')) {
+  // News sits beside About as a window of its own: changing item there keeps About open.
+  if (aboutOpen && !event.target.closest('[data-about-panel], [data-news-panel]')) {
     // A link leaves the page: page.js folds About away first (leaveAbout).
     if (event.target.closest('a[href]')) return;
     closeAboutToNav(false);
@@ -912,6 +941,9 @@ function clearMenuIdle() {
 /** Shows the footer with the menu. The archive slides its list to the end instead, so
     its footer arrives after the last row. */
 function raiseMenuFooter(header) {
+  // Phone: the menu opens on its own and the footer stays where it is. Closing then has
+  // nothing to lower (lowerFooter only undoes a raise it made).
+  if (phone.matches) return;
   if (footerIsRaised()) return;
   if (showArchiveFooter(true)) {
     markFooterRaised();

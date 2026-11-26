@@ -35,6 +35,14 @@ export const product = defineType({
       validation: (rule) => rule.required().uri({ scheme: ['http', 'https'] }),
     }),
     defineField({
+      name: 'size',
+      type: 'number',
+      description:
+        'How big the product shows in the merch pile and on its page. 1 is the size of a cap; 2 is twice as wide, like a tote bag.',
+      initialValue: 1,
+      validation: (rule) => rule.min(0.3).max(3),
+    }),
+    defineField({
       name: 'images',
       type: 'array',
       of: [imageField({ name: 'image' })],

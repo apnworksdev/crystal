@@ -91,6 +91,18 @@ body[data-footer-raised]:is(
   body:is(:has([data-roulette]), :has([data-merch-reel]), :not([data-work-view='list']):has([data-reel])) .site-header:not([data-about]) {
     transition: top var(--grow-duration) var(--ease-out);
   }
+
+  /* The risen footer covers what is under it, so its text never mixes with the page's
+     on a small screen. Added by Claude for legibility: restyle freely. */
+  body[data-footer-raised] .site-footer {
+    /* Only as tall as its links: where it stops under an open column, the half-screen
+       minimum would cover the page below with an empty block. */
+    min-height: 0;
+    padding-bottom: var(--small-gap);
+    background: var(--background-color);
+    /* The footer is inset by the margin; this fills the strip to the screen's edge. */
+    box-shadow: calc(-1 * var(--margin)) 0 0 0 var(--background-color);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

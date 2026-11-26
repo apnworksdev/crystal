@@ -133,37 +133,47 @@ body[data-page='archive'] .empty-message {
 
 /* Rows that have passed the bar sit just above it.
 
-   Where the browser can tie an animation to the scroll (Chrome, Edge, Safari), each row
-   moves up in the very frame its top passes the bar's bottom edge. The row's view
-   timeline starts when its top enters at the bottom of the screen, so the bar's edge is
-   half a screen minus half a bar further on. Nothing runs before that point, and the move
-   holds after it.
+   Where the browser can tie an animation to the scroll (Chrome, Edge, Safari), a row
+   slides up behind the bar at twice the scroll speed, from the moment its top meets the
+   bar's bottom edge until it sits above the bar, one slot of scrolling later. It never
+   jumps, so the rows flow through the bar instead of popping, and at every snap point the
+   rows sit exactly a slot apart. The row's view timeline starts when its top enters at
+   the bottom of the screen, which is where the cover offsets count from.
 
-   Elsewhere (Firefox, for now) archive.js moves rows with IntersectionObservers, which
-   react a frame later: on a fast flick a row can show half under the bar for a frame. */
+   Elsewhere (Firefox, for now) archive.js moves rows with IntersectionObservers. The row
+   then slides over in a short transition instead of in step with the scroll. */
 @supports (animation-timeline: view()) {
   .archive__item {
     animation-name: archive-skip;
     animation-timing-function: linear;
-    animation-fill-mode: forwards;
+    animation-fill-mode: both;
   }
 
   /* A rule of its own: the build's minifier would fold the timeline into the animation
      shorthand, where browsers don't accept it, and drop the whole thing. */
   .archive .archive__item {
     animation-timeline: view();
-    animation-range: cover calc(50dvh - var(--height-bubble) / 2) cover 100%;
+    animation-range:
+      cover calc(50dvh - var(--height-bubble) / 2 - var(--small-gap))
+      cover calc(50dvh + var(--height-bubble) / 2);
   }
 }
 
 @keyframes archive-skip {
-  from,
+  from {
+    translate: 0 0;
+  }
   to {
     translate: 0 calc(-1 * var(--archive-skip));
   }
 }
 
 @supports not (animation-timeline: view()) {
+  /* Behaviour: the fallback slides too, briefly, rather than jumping. */
+  .archive__item {
+    transition: translate 0.12s linear;
+  }
+
   .archive__item[data-archive-before] {
     translate: 0 calc(-1 * var(--archive-skip));
   }

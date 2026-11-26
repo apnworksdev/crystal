@@ -41,9 +41,9 @@ body:has([data-merch-reel]) {
   top: 50%;
   left: 50%;
   display: block;
-  width: max-content;
-  max-width: min(52vw, 40rem);
   transform: translate(-50%, -50%);
+  /* Behaviour: merch-reel.js changes these every frame. Own layers keep the blur smooth. */
+  will-change: transform, opacity, filter;
 }
 
 /* Only the front picture is painted until the reel script places the rest. */
@@ -51,32 +51,35 @@ body:has([data-merch-reel]) {
   visibility: hidden;
 }
 
+/* No focus ring and no tap flash on the pictures: they looked odd on a phone. */
+.merch-reel__card {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.merch-reel__card:focus,
 .merch-reel__card:focus-visible {
-  outline: 2px solid var(--foreground-color);
-  outline-offset: 2px;
+  outline: none;
 }
 
 .merch-reel__card {
-  --card-max-width: min(52vw, 40rem);
-  --card-max-height: 42vh;
+  /* Each product is as wide as the base times its size (Studio: 1 is a cap, 2 a tote), and
+     never wider than the screen. The base is a cap's width: 44% of the screen height, or
+     62.9% of the width on a narrow screen. Its height follows its shape, so a tall product
+     can reach past the screen, as in the reference. */
+  --card-w: min(min(62.9vw, 44vh) * var(--size, 1), 100vw - var(--margin) * 2);
+  width: var(--card-w);
 }
 
 .merch-reel__card img {
   display: block;
-  width: auto;
+  width: 100%;
   height: auto;
-  max-width: var(--card-max-width);
-  max-height: var(--card-max-height);
   pointer-events: none;
 }
 
 /* The ratio is known before the file arrives, so the frame already has its size and the
    row does not shift while it loads. Padding-bottom keeps the shape (older browsers lack
    aspect-ratio); the picture fills the frame. */
-.merch-reel__card[data-ratio] {
-  width: min(var(--card-max-width), calc(var(--card-max-height) * var(--ratio)));
-}
-
 .merch-reel__card[data-ratio]::before {
   content: '';
   display: block;
@@ -87,25 +90,12 @@ body:has([data-merch-reel]) {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
   height: 100%;
-  max-width: none;
-  max-height: none;
 }
 
-@media (max-width: 40rem) {
-  .merch-reel__card {
-    --card-max-width: min(78vw, 40rem);
-    --card-max-height: 32vh;
-    max-width: min(78vw, 40rem);
-  }
-}
-
-/* Phone: the pile fills the space above the docked header. */
+/* Phone: the pile runs edge to edge above the docked header. */
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
-  .merch-reel__card {
-    --card-max-width: calc(100vw - var(--margin) * 2);
-    --card-max-height: 56dvh;
-    max-width: calc(100vw - var(--margin) * 2);
+  .merch-reel__stage {
+    padding-inline: 0;
   }
 }

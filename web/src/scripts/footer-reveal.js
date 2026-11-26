@@ -1,4 +1,4 @@
-// Opening the menu shows the footer. On Home, Work, Merch and Awards the page does not
+// Opening the menu shows the footer on desktop (phones skip it: header.js). On Home, Work, Merch and Awards the page does not
 // scroll to the footer, so it waits below the screen and rises on its own until its top
 // meets the header (footer.css; this file measures where to stop) — page content stays
 // put. On pages that do scroll, the same open scrolls to that stop. Closing lowers the
@@ -29,6 +29,18 @@ export function headerRestBottom(headerTop, headerHeight, viewportHeight) {
 /** How far the footer rises from the bottom of the screen to meet that edge. */
 export function footerRise(headerTop, headerHeight, viewportHeight) {
   return Math.max(0, Math.round(viewportHeight - headerRestBottom(headerTop, headerHeight, viewportHeight)));
+}
+
+/**
+ * How far the open menu hangs below the header row. On a phone the links open as a
+ * column under the row where the header sits high (Awards, the Work list, text pages);
+ * the footer stops under that column, not under the row. Zero where the column opens
+ * upwards or sits in the row (desktop).
+ */
+function columnBelow(header, rect) {
+  const links = header.querySelector('.site-header__links');
+  if (!links || !header.hasAttribute('data-open')) return 0;
+  return Math.max(0, links.getBoundingClientRect().bottom - rect.bottom);
 }
 
 /** Pages locked so the footer is not reachable by scroll: it rises in CSS without
@@ -119,9 +131,8 @@ export function raiseFooter(header) {
   if (!header || raised || document.body.hasAttribute('data-footer-raised')) return;
 
   if (usesFooterRise()) {
-    // The header row only: on a phone the open menu column is positioned outside it.
     const rect = header.getBoundingClientRect();
-    const rise = footerRise(rect.top, rect.height, window.innerHeight);
+    const rise = Math.max(0, footerRise(rect.top, rect.height, window.innerHeight) - columnBelow(header, rect));
     document.body.style.setProperty('--footer-rise', `${rise}px`);
     document.body.setAttribute('data-footer-raised', '');
     raised = { kind: 'rise' };
@@ -138,7 +149,7 @@ export function raiseFooter(header) {
   if (!root) return;
 
   const rect = header.getBoundingClientRect();
-  const rest = headerRestBottom(rect.top, rect.height, window.innerHeight);
+  const rest = headerRestBottom(rect.top, rect.height, window.innerHeight) + columnBelow(header, rect);
   const delta = footer.getBoundingClientRect().top - rest;
   if (delta <= 1) return;
 

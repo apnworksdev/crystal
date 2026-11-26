@@ -17,6 +17,14 @@
   height: var(--height-bubble);
 }
 
+/* Behaviour: when the header runs past the screen it can be moved sideways
+   (header-scroll.js sets --header-shift). Nothing moves while it fits. */
+.site-header {
+  translate: calc(-1 * var(--header-shift, 0px)) 0;
+  /* Sideways finger moves on the header go to the script; vertical ones stay the browser's. */
+  touch-action: pan-y;
+}
+
 /* The header animates itself. The router's snapshot otherwise hides it for a frame. */
 .site-header[data-astro-transition-scope] {
   view-transition-name: none;
@@ -70,6 +78,16 @@
 
 .site-header__project[hidden] {
   display: none;
+}
+
+/* Behaviour: on Merch the front product's name (merch-reel.js) comes after the Merch link,
+   before the +. */
+body:has([data-merch-reel]) .site-header:not([data-about]) .site-header__context {
+  order: 1;
+}
+
+body:has([data-merch-reel]) .site-header:not([data-about]) .site-header__toggle {
+  order: 2;
 }
 
 /* Closed: only the active link has size. The others stay in the row at width 0 so they can grow open. */
@@ -698,6 +716,12 @@ body[data-player-idle] .site-header {
   pointer-events: none;
 }
 
+/* Behaviour: the x still closes while the controls are faded, so a tap on it is never
+   lost to the video underneath. Everything else wakes the controls first. */
+body[data-player-idle] .site-header__close {
+  pointer-events: auto;
+}
+
 body[data-page='project'] .site-header :focus-visible {
   outline-color: var(--background-color);
 }
@@ -982,6 +1006,16 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     margin-left: calc(var(--height-bubble) + var(--small-gap));
   }
 
+  /* Behaviour: the nav's box starts over the x, so it lets taps through; only its
+     links take them. Without this the x can't be tapped while the column is open. */
+  .site-header .site-header__nav {
+    pointer-events: none;
+  }
+
+  .site-header .site-header__nav > * {
+    pointer-events: auto;
+  }
+
   /* Closed, the links are a row of zero widths, so Work and Merch sit on the
      header row and their extras can be placed from there. */
   .site-header__views {
@@ -1011,11 +1045,11 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     left: calc(var(--height-bubble) + var(--small-gap));
   }
 
-  /* Product: Crystal stays docked at the bottom; the price and Buy sit together at the
-     top of the screen, measured back from the header's row. */
+  /* Product: Crystal stays docked at the bottom; the price and Buy sit just above the
+     product title, lined up with it. */
   body[data-page='product'] .site-header__product {
-    top: calc(var(--margin) - var(--header-y, 50dvh) + var(--height-bubble) / 2);
-    left: calc(-1 * (var(--height-bubble) + var(--small-gap)));
+    top: calc(-1 * (var(--height-bubble) + var(--small-gap)));
+    left: calc(var(--height-bubble) + var(--small-gap));
   }
 
   .site-header__buy {
@@ -1034,6 +1068,18 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
 
   .site-header__project {
     max-width: calc(100vw - var(--margin) * 2);
+  }
+
+  /* Behaviour: on Merch the product's name stays on the header row, after the +. */
+  body:has([data-merch-reel]) .site-header:not([data-about]) .site-header__context {
+    position: relative;
+    top: auto;
+    order: 3;
+    margin-left: var(--small-gap);
+  }
+
+  body:has([data-merch-reel]) .site-header__project {
+    max-width: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
   }
 
   body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header:not([data-about]) {

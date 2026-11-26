@@ -1,13 +1,45 @@
 ---
 import { stegaClean } from '@sanity/client/stega';
+import { cardStackStyle, depthOf } from '../lib/card-stack.js';
 import '../styles/components/product-strip.css';
 
-const { product } = Astro.props;
+const { product, products = [] } = Astro.props;
 const title = stegaClean(product.title) ?? '';
 const images = product.images ?? [];
 const copies = images.length > 0 ? [0, 1, 2] : [];
 // Known before the file arrives, so each picture holds its size and the strip does not shift.
 const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width / image.height).toFixed(4) : undefined);
+
+// The merch pile, still behind the pictures: this product would be in front, the others in
+// their places behind it, blurred further and nearly gone (as in the reference). Placed
+// here once, from the same stack as the merch page (lib/card-stack.js). The front card is
+// left out: the pictures take its place.
+const PILE_FADE = 0.052;
+const PILE_BLUR = 20;
+const slugOf = (item) => stegaClean(item.slug);
+const at = products.findIndex((item) => slugOf(item) === slugOf(product));
+const pile = at < 0
+  ? []
+  : products
+      .map((item, index) => {
+        const depth = depthOf(index, at, products.length);
+        const style = cardStackStyle(depth, false, products.length);
+        return { item, depth, style, image: item.images?.[0] };
+      })
+      .filter(({ depth, style, image }) => depth > 0 && style.opacity > 0.01 && image)
+      .map(({ item, style, image }) => ({
+        image,
+        style: [
+          `--size: ${item.size ?? 1}`,
+          ratio(image) ? `--ratio: ${ratio(image)}` : '',
+          `transform: translate(-50%, -50%) translateY(${style.y.toFixed(2)}px)`,
+          `filter: blur(${(style.blur + PILE_BLUR).toFixed(1)}px)`,
+          `opacity: ${(style.opacity * PILE_FADE).toFixed(3)}`,
+          `z-index: ${style.z}`,
+        ]
+          .filter(Boolean)
+          .join('; '),
+      }));
 ---
 
 {
@@ -16,9 +48,20 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
       class="product-strip"
       data-product-strip
       aria-label={title}
-      style={`--reel-steps: ${Math.max(images.length - 1, 0)}; --strip-count: ${images.length}`}
+      style={`--reel-steps: ${Math.max(images.length - 1, 0)}; --strip-count: ${images.length}; --size: ${product.size ?? 1}`}
     >
       <div class="product-strip__stage">
+        {
+          pile.length > 0 && (
+            <div class="product-strip__pile" aria-hidden="true">
+              {pile.map(({ image, style }) => (
+                <div class="product-strip__ghost" data-ratio={ratio(image) ? true : undefined} style={style}>
+                  <img src={image.src} srcset={image.srcset} sizes="(max-width: 48rem) 100vw, (min-width: 81.25rem) 52rem, 64vw" width={image.width} height={image.height} alt="" loading="lazy" decoding="async" />
+                </div>
+              ))}
+            </div>
+          )
+        }
         <div class="product-strip__track" data-product-track>
           {copies.map((copy) =>
             images.map((image, index) => (
@@ -33,7 +76,7 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
                 <img
                   src={image.src}
                   srcset={image.srcset}
-                  sizes="(min-width: 70rem) 40rem, 52vw"
+                  sizes="(max-width: 48rem) 100vw, (min-width: 81.25rem) 52rem, 64vw"
                   width={image.width}
                   height={image.height}
                   alt=""

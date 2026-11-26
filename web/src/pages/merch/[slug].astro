@@ -12,6 +12,8 @@ export async function getStaticPaths() {
 // Looked up by slug because preview mode renders on the server, without getStaticPaths.
 const product = await getProduct(Astro.params.slug);
 if (!product) return Astro.rewrite('/404');
+// The merch pile stays behind the pictures, faded, as it is on the merch page.
+const products = await getProducts();
 
 const title = stegaClean(product.title);
 const price = formatPrice(stegaClean(product.price));
@@ -20,5 +22,5 @@ const url = stegaClean(product.url);
 
 <Base title={title} product>
   <span data-product-source hidden data-title={title} data-price={price} data-url={url}></span>
-  <ProductStrip product={product} />
+  <ProductStrip product={product} products={products} />
 </Base>

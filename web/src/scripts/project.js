@@ -339,6 +339,7 @@ export function setUpProject() {
   let duration = 0;
   let idleAtPointerDown = false;
   let pointerType = 'mouse';
+  let playing = false;
 
   const name = player?.querySelector('[data-player-name]');
   const nameButton = player?.querySelector('[data-player-title]');
@@ -410,7 +411,12 @@ export function setUpProject() {
     document.body.removeAttribute('data-player-idle');
     window.clearTimeout(idleTimer);
     idleTimer = window.setTimeout(() => {
-      if (signal.aborted) return;
+      // Only a playing video hides the controls. Paused, stalled or not started, they
+      // stay, so there is always a way to play or close.
+      if (signal.aborted || !playing) return;
+      // Never under a resting mouse: the controls would fade under it, and a click meant
+      // for the x would land on the video. Moving away wakes and restarts this timer.
+      if (player?.closest('.site-header')?.matches(':hover')) return;
       document.body.setAttribute('data-player-idle', '');
       if (cursor) cursor.hidden = true;
       stage?.classList.remove('is-cursor');
@@ -426,6 +432,10 @@ export function setUpProject() {
   };
 
   const paint = (state) => {
+    if (playing !== state.playing) {
+      playing = state.playing;
+      wake();
+    }
     if (state.playing) {
       started = true;
       project.removeAttribute('data-waiting');

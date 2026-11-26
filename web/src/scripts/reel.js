@@ -1,18 +1,19 @@
 // Work stack. The picture in front is sharp; the ones behind sit higher, blurred and
 // fainter (lib/card-stack.js). Scrolling moves through the pile: the next picture comes
-// forward while the front one leaves. The words leave as soon as scrolling starts and
-// return when a picture has settled. The sequence loops.
+// forward while the front one leaves. The words stay up and change to the picture in
+// front as it takes over. The sequence loops.
 
 import { cardStackStyle, depthOf } from '../lib/card-stack.js';
 import { closeNav } from './header.js';
+import { watchScrollEnd } from './scroll-end.js';
 
 // Settling onto a picture: the shared expo-out (--ease-out, --grow-duration).
 const SETTLE_MS = 500;
 const easeOut = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
 
 let root;
+let stopScrollEnd = () => {};
 let wordsFor = -1;
-let wordsFrame = 0;
 let frame = 0;
 let wrapping = false;
 let settling = false;
@@ -60,34 +61,27 @@ function place(card, { opacity, blur, scale, y, z, active }) {
   card.style.filter = blur > 0.4 ? `blur(${blur.toFixed(2)}px)` : 'none';
   card.style.transform = `translate(-50%, -50%) translateY(${y.toFixed(2)}px) scale(${scale.toFixed(4)})`;
   card.style.zIndex = String(z);
+  // Runs every frame while scrolling: attributes change only when the front card does,
+  // since rewriting them restyles the card even with the same value.
+  if (card.dataset.front === String(active)) return;
+  card.dataset.front = String(active);
   card.style.pointerEvents = active ? '' : 'none';
   card.tabIndex = active ? 0 : -1;
   if (active) card.removeAttribute('aria-hidden');
   else card.setAttribute('aria-hidden', 'true');
 }
 
-function hideWords() {
-  if (root) root.dataset.reelWords = 'hidden';
-}
-
 function showWords(index) {
   const card = cards()[index];
-  const brand = root.querySelector('[data-reel-brand]');
-  const title = root.querySelector('[data-reel-title]');
   if (!card) return;
   if (wordsFor !== index) {
     wordsFor = index;
+    const brand = root.querySelector('[data-reel-brand]');
+    const title = root.querySelector('[data-reel-title]');
     if (brand) brand.textContent = card.dataset.brand || '';
     if (title) title.textContent = card.dataset.title || '';
-    if (root.dataset.reelWords === 'hidden') {
-      cancelAnimationFrame(wordsFrame);
-      wordsFrame = requestAnimationFrame(() => {
-        if (wordsFor === index && root?.isConnected) root.dataset.reelWords = 'shown';
-      });
-      return;
-    }
   }
-  root.dataset.reelWords = 'shown';
+  if (root.dataset.reelWords !== 'shown') root.dataset.reelWords = 'shown';
 }
 
 function paint() {
@@ -113,11 +107,9 @@ function paint() {
     place(card, { ...style, active: i === activeIndex && style.opacity > 0.4 });
   });
 
-  // A fraction of a pixel can leave the scroll just short of the next picture.
-  const distance = local < 0.5 ? local : 1 - local;
-  const resting = local < 0.5 ? index : (index + 1) % count;
-  if (!settling && distance < 0.02) showWords(resting);
-  else hideWords();
+  // The words follow the picture in front, so they never leave the screen empty while
+  // scrolling (they used to wait for the stack to settle, and Safari never settled it).
+  showWords(activeIndex);
 }
 
 function progress() {
@@ -148,7 +140,6 @@ function cancelSettle() {
 }
 
 function animateTo(target) {
-  hideWords();
   const start = root.scrollTop;
   const delta = target - start;
   if (Math.abs(delta) < 1) {
@@ -300,7 +291,8 @@ function onKeyDown(event) {
 
 function unbind(reel) {
   reel.removeEventListener('scroll', onScroll);
-  reel.removeEventListener('scrollend', onScrollEnd);
+  stopScrollEnd();
+  stopScrollEnd = () => {};
   reel.removeEventListener('wheel', onWheel);
   reel.removeEventListener('pointerdown', onPointerDown);
   reel.removeEventListener('pointerdown', onTouchDown);
@@ -313,7 +305,6 @@ function unbind(reel) {
 export function setUpReel() {
   if (root) unbind(root);
   cancelAnimationFrame(frame);
-  cancelAnimationFrame(wordsFrame);
   cancelSettle();
   wordsFor = -1;
 
@@ -327,7 +318,7 @@ export function setUpReel() {
 
   if (views) views.hidden = false;
   root.addEventListener('scroll', onScroll, { passive: true });
-  root.addEventListener('scrollend', onScrollEnd);
+  stopScrollEnd = watchScrollEnd(root, onScrollEnd);
   root.addEventListener('wheel', onWheel, { passive: true });
   root.addEventListener('pointerdown', onPointerDown);
   root.addEventListener('pointerdown', onTouchDown);

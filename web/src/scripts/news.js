@@ -75,6 +75,9 @@ function show(target, next) {
   // Pictures of the new item start at the top; scrolling inside does not resize.
   const photos = target.querySelector(`.news-panel__image[data-news-item="${current}"] [data-news-photos]`);
   if (photos) photos.scrollTop = 0;
+  // Phone: the whole pictures area scrolls instead (news.css), so it starts at the top too.
+  const area = target.querySelector('.news-panel__images');
+  if (area) area.scrollTop = 0;
   // The next item's first picture starts loading before it's asked for.
   const upcoming = target.querySelector(
     `.news-panel__image[data-news-item="${(current + 1) % count}"] img`,

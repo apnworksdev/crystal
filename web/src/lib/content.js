@@ -73,7 +73,7 @@ const QUERIES = {
     _id, ceremony, category, work, year, image ${IMAGE}
   }`,
   products: `*[_type == "product" && defined(slug.current)] | order(_createdAt desc) {
-    _id, title, "slug": slug.current, price, url, images[] ${IMAGE}
+    _id, title, "slug": slug.current, price, url, size, images[] ${IMAGE}
   }`,
   about: `*[_type == "aboutPage"][0] {
     content,
@@ -161,6 +161,8 @@ const TRANSFORMS = {
   products: (products) =>
     products.map((product) => ({
       ...product,
+      // 1 is a cap. Missing or nonsense values fall back to it.
+      size: Number.isFinite(product.size) && product.size > 0 ? product.size : 1,
       images: (product.images ?? []).map((image) => toImage(image)).filter(Boolean),
     })),
   about: (about) => {

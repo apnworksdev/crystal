@@ -1,7 +1,9 @@
 // Work page: stack or list. The list filters by category and swaps the still on hover.
-// The list is endless: its rows repeat below, and scrolling past one set jumps back by
-// exactly one set, so the last project runs straight into the first. Only the rows scroll;
-// the still and the column bar above them stay put.
+// The list is endless both ways: copies of the rows sit above and below the real ones,
+// and the list opens on the real ones in the middle. Scrolling never moves the position by
+// script while it runs: on a phone that stops the momentum dead. Once it has stopped, it
+// goes back towards the middle by whole sets of rows, which looks exactly the same. Only
+// the rows scroll; the still and the column bar above them stay put.
 
 import { closeNav } from './header.js';
 
@@ -24,14 +26,32 @@ function originalRows() {
   return [...list.querySelectorAll('li:not([data-work-copy]) > [data-work-row]')];
 }
 
-/** Repeats the visible rows until they outrun the screen. Copies are skipped by screen readers and Tab. */
-function fillLoop() {
-  const rowsEl = list?.querySelector('.work-list__rows');
+// How far a scroll can run each way before it reaches the copies' end: more than a fast
+// fling on a phone covers, so a fling never hits the end.
+const LOOP_REACH = 9000;
+// A pause in scroll events this long means it has stopped (Safari has no scrollend).
+const LOOP_PAUSE_MS = 140;
+// The height of one set of rows, and the scroll position with the real rows at the top.
+let period = 0;
+let home = 0;
+let loopTimer = 0;
+
+function rowsElement() {
+  return list?.querySelector('.work-list__rows');
+}
+
+/** Repeats the visible rows above and below the real ones. Copies are skipped by screen readers and Tab. */
+function fillLoop({ keepPlace = false } = {}) {
+  const rowsEl = rowsElement();
+  // Where the rows were within a set, to land on the same row after a rebuild.
+  const place = keepPlace && period > 0 && rowsEl ? (((rowsEl.scrollTop - home) % period) + period) % period : 0;
+  period = 0;
+  home = 0;
   if (!rowsEl) return;
   rowsEl.querySelectorAll('[data-work-copy]').forEach((copy) => copy.remove());
   const items = originalRows().map((row) => row.parentElement);
   if (!items.some((item) => !item.firstElementChild.hidden)) return;
-  const addSet = () => {
+  const makeSet = () => {
     const fragment = document.createDocumentFragment();
     items.forEach((item) => {
       const copy = item.cloneNode(true);
@@ -40,32 +60,43 @@ function fillLoop() {
       copy.querySelector('a')?.setAttribute('tabindex', '-1');
       fragment.append(copy);
     });
-    rowsEl.append(fragment);
+    return fragment;
   };
-  // One copy first, to measure a set. Then enough to fill the rows area at the jump.
-  addSet();
-  const period = loopPeriod();
+  // One copy below first, to measure a set.
+  rowsEl.append(makeSet());
+  const firstCopy = rowsEl.querySelector('[data-work-copy]');
+  period = firstCopy ? firstCopy.offsetTop - items[0].offsetTop : 0;
   if (period <= 0) return;
-  const sets = Math.min(200, Math.ceil((rowsEl.clientHeight || window.innerHeight) / period) + 2);
-  for (let set = 2; set < sets; set += 1) addSet();
+  const screen = rowsEl.clientHeight || window.innerHeight;
+  const sets = Math.min(200, Math.ceil((LOOP_REACH + screen) / period));
+  for (let set = 1; set < sets; set += 1) rowsEl.append(makeSet());
+  const above = document.createDocumentFragment();
+  for (let set = 0; set < sets; set += 1) above.append(makeSet());
+  rowsEl.prepend(above);
+  home = period * sets;
+  rowsEl.scrollTop = home + place;
 }
 
-function loopPeriod() {
-  const rowsEl = list?.querySelector('.work-list__rows');
-  const firstCopy = rowsEl?.querySelector('[data-work-copy]');
-  const first = rowsEl?.firstElementChild;
-  if (!firstCopy || !first) return 0;
-  return firstCopy.offsetTop - first.offsetTop;
+/** Back towards the real rows by whole sets, once the scroll has stopped. Nothing moves on screen. */
+function recentre() {
+  const rowsEl = rowsElement();
+  if (!rowsEl || period <= 0 || list.hidden) return;
+  const away = rowsEl.scrollTop - home;
+  const sets = away > 0 ? Math.floor(away / period) : Math.ceil(away / period);
+  if (sets) rowsEl.scrollTop -= sets * period;
 }
 
 function onListScroll(event) {
   if (!list?.isConnected || list.hidden || document.body.dataset.workView !== 'list') return;
-  const rowsEl = list.querySelector('.work-list__rows');
-  if (event.target !== rowsEl) return;
-  const period = loopPeriod();
-  if (period <= 0) return;
-  // Past one whole set, the same rows sit one set higher, so the jump does not show.
-  if (rowsEl.scrollTop >= period) rowsEl.scrollTop -= period;
+  if (event.target !== rowsElement()) return;
+  window.clearTimeout(loopTimer);
+  loopTimer = window.setTimeout(recentre, LOOP_PAUSE_MS);
+}
+
+function onListScrollEnd(event) {
+  if (!list?.isConnected || event.target !== rowsElement()) return;
+  window.clearTimeout(loopTimer);
+  recentre();
 }
 
 /** The still and the column bar do not scroll. A wheel over them moves the rows. */
@@ -113,7 +144,10 @@ function syncInset() {
   // The + sits 1px from the Index bar. Ceil would round the edge and the gap
   // together, so a fractional header edge opens a gap of anywhere from 1px to 2px.
   const right = header.getBoundingClientRect().right;
-  document.documentElement.style.setProperty('--work-list-inset', `${right + 1}px`);
+  // Runs every frame while the menu moves. Writing the same value still restyles the page.
+  const inset = `${right + 1}px`;
+  const root = document.documentElement.style;
+  if (root.getPropertyValue('--work-list-inset') !== inset) root.setProperty('--work-list-inset', inset);
 }
 
 // The list starts 1px right of the header. While the menu grows or folds, the list moves
@@ -322,11 +356,31 @@ document.addEventListener('click', (event) => {
   armListStill(row);
 }, true);
 
+// The still only changes once its file has arrived, so on a first pass down the list it
+// lagged behind the pointer. The rows around the hovered one start loading ahead of time.
+const warmed = new Set();
+const WARM_AROUND = 3;
+
+function warmNeighbours(row) {
+  const rows = [...list.querySelectorAll('[data-work-row]:not([hidden])')];
+  const at = rows.indexOf(row);
+  if (at < 0) return;
+  rows.slice(Math.max(0, at - WARM_AROUND), at + WARM_AROUND + 1).forEach((near) => {
+    const src = near.dataset.still;
+    if (!src || warmed.has(src)) return;
+    warmed.add(src);
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = src;
+  });
+}
+
 document.addEventListener('pointerover', (event) => {
   if (!list?.isConnected || list.hidden) return;
   const row = event.target.closest?.('[data-work-row]');
   if (!row || row.hidden || !list.contains(row)) return;
   showStill(row.dataset.still);
+  warmNeighbours(row);
 });
 
 document.addEventListener('focusin', (event) => {
@@ -337,15 +391,21 @@ document.addEventListener('focusin', (event) => {
 });
 
 let fillTimer = 0;
+let fillWidth = window.innerWidth;
 window.addEventListener('resize', () => {
   syncInset();
+  // A phone's address bar changes the height alone while scrolling. Rebuilding then would
+  // move the rows under the finger, and the copies already reach far past the screen.
+  if (window.innerWidth === fillWidth) return;
+  fillWidth = window.innerWidth;
   window.clearTimeout(fillTimer);
   fillTimer = window.setTimeout(() => {
-    if (list?.isConnected && !list.hidden) fillLoop();
+    if (list?.isConnected && !list.hidden) fillLoop({ keepPlace: true });
   }, 150);
 });
 // Scroll does not bubble, so the rows' own scrolling is caught on the way down.
 document.addEventListener('scroll', onListScroll, { capture: true, passive: true });
+document.addEventListener('scrollend', onListScrollEnd, { capture: true, passive: true });
 document.addEventListener('wheel', onListWheel, { passive: true });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && list?.isConnected) followHeader();

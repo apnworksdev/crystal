@@ -8,6 +8,8 @@ const cards = products.map((product) => ({
   slug: stegaClean(product.slug),
   title: stegaClean(product.title) ?? '',
   image: product.images[0] ?? null,
+  // How big it shows (Studio, 1 for a cap). Sizes the card in merch-reel.css.
+  size: product.size ?? 1,
 }));
 // Known before the file arrives, so each picture holds its size and the reel does not shift.
 const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width / image.height).toFixed(4) : undefined);
@@ -30,7 +32,7 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
               href={`/merch/${card.slug}`}
               data-merch-card
               data-ratio={ratio(card.image) ? true : undefined}
-              style={ratio(card.image) ? `--ratio: ${ratio(card.image)}` : undefined}
+              style={[`--size: ${card.size}`, ratio(card.image) ? `--ratio: ${ratio(card.image)}` : ''].filter(Boolean).join('; ')}
               tabindex={index === 0 ? 0 : -1}
             >
               {
@@ -38,14 +40,14 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
                   <img
                     src={card.image.src}
                     srcset={card.image.srcset}
-                    sizes="(min-width: 70rem) 40rem, 52vw"
+                    sizes="(max-width: 48rem) 100vw, (min-width: 81.25rem) 52rem, 64vw"
                     width={card.image.width}
                     height={card.image.height}
                     alt=""
                   />
                 )
               }
-              <span class="sr-only">{card.title}</span>
+              <span class="sr-only" data-merch-title>{card.title}</span>
             </a>
           ))}
         </div>

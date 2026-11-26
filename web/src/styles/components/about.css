@@ -71,17 +71,12 @@
   pointer-events: none;
 }
 
-/* Desktop, News open beside About: News gets a share of the width and the About columns
-   give it up, so the whole row, x included, fits the screen. News sizes its picture to
-   that share. */
+/* Desktop, News open beside About: three windows of one width (News takes --about-col
+   too), narrowed together where the screen is too small for three, so the whole row,
+   x included, fits. */
 @media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
   .site-header[data-about][data-news] {
-    --about-news-room: min(26vw, 22rem);
-    --about-col: min(22rem, calc((100vw - var(--margin) * 2 - 8rem - var(--about-news-room)) / 2));
-  }
-
-  body .site-header[data-about][data-news] .news-panel[data-news-panel]:not([hidden]) {
-    --news-image-h: min(64dvh, 46rem, calc((var(--about-news-room) - var(--inline-gap) * 2) / var(--news-ratio, 0.75)));
+    --about-col: min(22rem, calc((100vw - var(--margin) * 2 - 8rem - var(--small-gap)) / 3));
   }
 }
 
@@ -343,7 +338,10 @@
   flex-direction: column;
   gap: 0.65rem;
   padding: 0.45rem 0.45rem 0.4rem;
-  overflow: auto;
+  /* Behaviour: hidden, the card does not scroll, so a swipe over a photo scrolls the
+     team list instead of an invisible card. Shown, a long text scrolls inside it and
+     stops at its ends instead of carrying on into the list. */
+  overflow: hidden;
   background: var(--background-color);
   color: var(--foreground-color);
   opacity: 0;
@@ -352,6 +350,8 @@
 
 .team-member:hover .team-member__card,
 .team-member:focus-within .team-member__card {
+  overflow-y: auto;
+  overscroll-behavior: contain;
   opacity: 1;
 }
 
@@ -416,49 +416,24 @@ main,
     height: auto;
   }
 
-  /* News tab: grid puts the shared panel under the about head in the middle column. */
-  .site-header[data-about]:has(.about-panel[data-about-view='news']) {
-    display: grid;
-    grid-template-columns: var(--height-bubble) minmax(0, 1fr) var(--height-bubble);
-    grid-template-rows: auto auto;
-    column-gap: var(--small-gap);
-    align-items: start;
-    align-content: center;
-  }
-
-  .site-header[data-about]:has(.about-panel[data-about-view='news']) .site-header__logo {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .site-header[data-about]:has(.about-panel[data-about-view='news']) .site-header__toggle {
-    grid-column: 3;
-    grid-row: 1;
-    order: unset;
-    margin-left: 0;
-  }
-
-  .site-header[data-about]:has(.about-panel[data-about-view='news']) .about-panel:not([hidden]) {
-    grid-column: 2;
-    grid-row: 1;
-    flex: none;
-    width: 100%;
-    height: auto;
-    margin-left: 0;
-  }
-
+  /* News tab: the shared news panel takes the place of the copy and the team, in the same
+     column under the tabs, so the logo, the x and the tabs stay where they are. The
+     pictures are shown at their own size and the column scrolls (news.css). */
   .site-header[data-about][data-news]:has(.about-panel[data-about-view='news']) .news-panel[data-news-panel]:not([hidden]) {
-    --news-w: var(--about-phone-w);
-    --news-image-h: min(
-      calc((var(--news-w) - var(--inline-gap) * 2) / var(--news-ratio)),
-      calc(100dvh - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2 - var(--inline-gap))
-    );
-    grid-column: 2;
-    grid-row: 2;
-    align-self: stretch;
-    min-height: 0;
-    width: 100%;
+    position: absolute;
+    top: calc(var(--height-bubble) + var(--small-gap));
+    right: 0;
+    bottom: 0;
+    width: var(--about-phone-w);
     margin-left: 0;
+    /* Pages that dock the popup at an edge set align-self, which would shrink it here. */
+    align-self: stretch;
+  }
+
+  .site-header[data-about][data-news]:has(.about-panel[data-about-view='news']) .news-panel[data-news-panel]:not([hidden]) > * {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
   }
 
   .site-header[data-about]:has(.about-panel[data-about-view='news']) .news-panel .news-panel__head {
@@ -557,6 +532,8 @@ main,
 /* Touch screens: a tap shows a member's card, a tap elsewhere hides it. */
 @media (hover: none) {
   .team-member__image:focus .team-member__card {
+    overflow-y: auto;
+    overscroll-behavior: contain;
     opacity: 1;
   }
 

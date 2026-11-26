@@ -4,6 +4,7 @@ import { setUpArchive } from './archive.js';
 import { dismissAbout, leaveAbout, prepareSectionLeave, setUpHeader } from './header.js';
 import { startIntro, whenIntroDone } from './intro.js';
 import { setUpNews } from './news.js';
+import { setUpHeaderScroll } from './header-scroll.js';
 import { navigate } from 'astro:transitions/client';
 import {
   coverBusy,
@@ -167,6 +168,7 @@ function setUpPage() {
   }
   setUpVideos();
   setUpHeader();
+  setUpHeaderScroll();
   if (fadeIn) holdContent();
   const pending = pageModules.map((module) => module.run()).filter(Boolean);
   if (!pending.length) {

@@ -68,6 +68,8 @@ body:has([data-reel]:not([hidden])) {
   width: max-content;
   max-width: min(52vw, 40rem);
   transform: translate(-50%, -50%);
+  /* Behaviour: reel.js changes these every frame. Own layers keep the blur smooth. */
+  will-change: transform, opacity, filter;
 }
 
 /* Only the front picture is painted until the reel script places the rest. */

@@ -1,10 +1,18 @@
-// Product page strip. A sideways scroll (trackpad, shift + wheel, touch) or a
-// mouse drag moves the pictures. A vertical scroll moves the page, so the footer
-// can be reached. Same snap, loop and timing as the work reel.
+// Product page strip. The pictures sit in a sideways row that loops. Any scroll moves it:
+// down or right goes to the next picture, up or left to the one before (wheel, trackpad,
+// a swipe either way, a mouse drag, the arrow keys). The page itself is one screen and
+// never scrolls, so the footer is not reached (product-strip.css). Same snap, loop and
+// timing as the work reel.
+//
+// The strip does not scroll by itself (overflow-x: hidden): this script moves it. Its
+// sideways scroll position is only a counter; paint turns it into the row's movement, or
+// the column's on a phone (product-strip.css lays the pictures out either way).
 
 import { closeNav } from './header.js';
+import { watchScrollEnd } from './scroll-end.js';
 
 let root;
+let stopScrollEnd = () => {};
 let track;
 let frame = 0;
 let wrapping = false;
@@ -14,8 +22,15 @@ let dragged = false;
 let step = 1;
 let cycle = 1;
 let count = 0;
+// Phone: the pictures run in a column instead of a row.
+let vertical = false;
 let dragX = null;
 let dragMoved = false;
+// Mouse drag: how far it has moved the strip (forward is positive) and how fast, so a
+// release goes on to the next picture instead of springing back.
+let dragOffset = 0;
+let dragSpeed = 0;
+let dragT = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 // Settling onto a picture: the shared expo-out (--ease-out, --grow-duration).
 const SETTLE_MS = 500;
@@ -28,6 +43,7 @@ let touch = null;
 function layout() {
   const cards = [...root.querySelectorAll('[data-product-card][data-copy="1"]')];
   count = cards.length;
+  vertical = track ? getComputedStyle(track).flexDirection.startsWith('column') : false;
   const run = root.querySelector('.product-strip__run');
   // Whole pixels: browsers round scrollLeft, and a fractional lap made the settle and the
   // wrap undo each other every frame (which also kept closing the menu).
@@ -40,6 +56,7 @@ function layout() {
 function cardCenter(copy, index) {
   const card = root.querySelector(`[data-product-card][data-copy="${copy}"][data-index="${index}"]`);
   if (!card) return 0;
+  if (vertical) return card.offsetTop + card.offsetHeight / 2;
   return card.offsetLeft + card.offsetWidth / 2;
 }
 
@@ -72,7 +89,9 @@ function paint() {
   const from = cardCenter(1, index);
   const to = cardCenter(nextCopy, nextIndex);
   const center = from + (to - from) * local;
-  track.style.transform = `translateX(${root.clientWidth / 2 - center}px)`;
+  track.style.transform = vertical
+    ? `translateY(${root.clientHeight / 2 - center}px)`
+    : `translateX(${root.clientWidth / 2 - center}px)`;
 }
 
 function progress() {
@@ -173,8 +192,17 @@ function onResize() {
   paint();
 }
 
-function onWheel() {
+function onWheel(event) {
+  // Whichever way the gesture mostly goes. Only that axis counts, so a vertical trackpad
+  // swipe's small sideways drift does not pull against it.
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  // The strip takes every wheel: the page does not scroll, and a sideways swipe does not
+  // go back a page.
+  event.preventDefault();
+  if (!delta) return;
   cancelSettle();
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? root.clientWidth : 1;
+  root.scrollLeft += delta * unit;
 }
 
 function onPointerDown(event) {
@@ -186,6 +214,9 @@ function onPointerDown(event) {
   event.preventDefault();
   dragX = event.clientX;
   dragMoved = false;
+  dragOffset = 0;
+  dragSpeed = 0;
+  dragT = event.timeStamp;
   root.setPointerCapture?.(event.pointerId);
 }
 
@@ -195,32 +226,62 @@ function onPointerMove(event) {
   if (!dx) return;
   dragX = event.clientX;
   dragMoved = true;
+  dragOffset -= dx;
+  const dt = event.timeStamp - dragT;
+  if (dt > 0) dragSpeed = -dx / dt;
+  dragT = event.timeStamp;
   cancelSettle();
   root.scrollLeft -= dx;
 }
 
-function onPointerUp() {
+/** Releasing a mouse drag: on past a small pull or a quick flick, back otherwise. */
+function settleDrag(timeStamp) {
+  const { local } = progress();
+  const speed = timeStamp - dragT > 120 ? 0 : dragSpeed;
+  const forward = dragOffset > step * SWIPE_SHARE || speed > SWIPE_SPEED;
+  const back = dragOffset < -step * SWIPE_SHARE || speed < -SWIPE_SPEED;
+  // Between two pictures, `local` is how far past the earlier one the strip sits.
+  if (local > 0.001 && (forward || back)) {
+    animateTo(root.scrollLeft - local * step + (forward ? step : 0));
+    return;
+  }
+  settle();
+}
+
+function onPointerUp(event) {
   const wasDragging = dragX !== null && dragMoved;
   dragX = null;
   if (!root?.isConnected || root.hidden || settling) return;
-  if (wasDragging || !dragged) settle();
+  if (wasDragging) settleDrag(event.timeStamp);
+  else if (!dragged) settle();
 }
 
-// Touch screens: the strip has touch-action: pan-y, so vertical swipes still scroll the
-// page to the footer and sideways swipes come here. Native sideways scrolling on phones
-// fought the loop and the settle, so the finger moves the strip directly.
+// Touch screens: the strip has touch-action: none, so every swipe comes here and the
+// finger moves the strip directly. Up or left goes to the next picture, down or right to
+// the one before. The axis the finger moved further along leads.
 function onTouchDown(event) {
   if (event.pointerType !== 'touch' || !event.isPrimary) return;
   cancelSettle();
-  touch = { id: event.pointerId, x: event.clientX, offset: 0, lastX: event.clientX, lastT: event.timeStamp, speed: 0 };
+  touch = {
+    id: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    offset: 0,
+    last: 0,
+    lastT: event.timeStamp,
+    speed: 0,
+  };
 }
 
 function onTouchMove(event) {
   if (!touch || event.pointerId !== touch.id) return;
-  const offset = Math.max(-step, Math.min(step, touch.x - event.clientX));
+  const dx = touch.x - event.clientX;
+  const dy = touch.y - event.clientY;
+  const travel = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+  const offset = Math.max(-step, Math.min(step, travel));
   const dt = event.timeStamp - touch.lastT;
-  if (dt > 0) touch.speed = (touch.lastX - event.clientX) / dt;
-  touch.lastX = event.clientX;
+  if (dt > 0) touch.speed = (travel - touch.last) / dt;
+  touch.last = travel;
   touch.lastT = event.timeStamp;
   // scrollLeft can be wrapped by a whole copy between moves, so move by the change only.
   root.scrollLeft += offset - touch.offset;
@@ -232,7 +293,7 @@ function onTouchUp(event) {
   const { offset, speed } = touch;
   const stale = event.timeStamp - touch.lastT > 120;
   touch = null;
-  // pointercancel: the page took the gesture to scroll vertically.
+  // pointercancel: the browser took the gesture (a system swipe, say).
   if (event.type === 'pointercancel') {
     settle();
     return;
@@ -254,9 +315,8 @@ function onKeyDown(event) {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target.isContentEditable) return;
   }
 
-  // Up and down are left to the page, so it scrolls to the footer.
-  const down = event.key === 'ArrowRight';
-  const up = event.key === 'ArrowLeft';
+  const down = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+  const up = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
   if (!down && !up) return;
   event.preventDefault();
   closeNav();
@@ -273,7 +333,8 @@ function onKeyDown(event) {
 
 function unbind(reel) {
   reel.removeEventListener('scroll', onScroll);
-  reel.removeEventListener('scrollend', onScrollEnd);
+  stopScrollEnd();
+  stopScrollEnd = () => {};
   reel.removeEventListener('wheel', onWheel);
   reel.removeEventListener('pointerdown', onPointerDown);
   reel.removeEventListener('pointermove', onPointerMove);
@@ -309,8 +370,9 @@ export function setUpProductStrip() {
   root.scrollLeft = cycle;
   wrapping = false;
   root.addEventListener('scroll', onScroll, { passive: true });
-  root.addEventListener('scrollend', onScrollEnd);
-  root.addEventListener('wheel', onWheel, { passive: true });
+  stopScrollEnd = watchScrollEnd(root, onScrollEnd);
+  // Not passive: a sideways swipe must not also go back a page. Only bound on the product page.
+  root.addEventListener('wheel', onWheel, { passive: false });
   root.addEventListener('pointerdown', onPointerDown);
   root.addEventListener('pointermove', onPointerMove);
   root.addEventListener('pointerdown', onTouchDown);

@@ -17,6 +17,9 @@ let frame = 0;
 let lastTime = 0;
 let idleTimer = 0;
 let drifting = false;
+// The drift is under half a pixel a frame and browsers round scrollTop, so adding to
+// scrollTop itself stalled (Safari) or stepped unevenly. The exact position lives here.
+let driftTop = 0;
 let wrapping = false;
 /** @type {Set<string>} */
 const pauses = new Set();
@@ -66,7 +69,11 @@ function tick(now) {
   lastTime = now;
   if (pauses.size === 0 && looping) {
     drifting = true;
-    scroller.scrollTop += (PX_PER_SECOND * dt) / 1000;
+    // Someone else moved it (a wheel, a wrap): carry on from there.
+    if (Math.abs(scroller.scrollTop - driftTop) > 1.5) driftTop = scroller.scrollTop;
+    driftTop += (PX_PER_SECOND * dt) / 1000;
+    if (loopHeight >= 1 && driftTop >= loopHeight) driftTop -= loopHeight;
+    scroller.scrollTop = driftTop;
     normalize();
     drifting = false;
   }
@@ -197,6 +204,7 @@ export function setUpAwards() {
 
   if (looping) {
     lastTime = performance.now();
+    driftTop = scroller.scrollTop;
     frame = requestAnimationFrame(tick);
   }
 }

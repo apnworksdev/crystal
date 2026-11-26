@@ -45,7 +45,10 @@ lib/          data and helpers, no browser code
 pages/        one file per route
 preview/      code that only exists in preview mode (draft-mode route, session check, click-to-edit)
 scripts/      browser code (page.js: video autoplay, click-to-load Vimeo player; news.js: the news panel;
-              footer-reveal.js: Home's footer rising with the menu)
+              footer-reveal.js: Home's footer rising with the menu; box-resize.js: dragging the bottom
+              edge of the About, Team and News windows; scroll-end.js: scrollend with a fallback for
+              Safari, used by every reel and strip that settles; header-scroll.js: moves the header
+              sideways when it runs past the screen)
 styles/       see below
 ```
 
@@ -126,7 +129,7 @@ web/src/styles/
 | `archive` | archive. A native snapping scroll; rows that pass the bar move above it (`archive.js`) | `__item`, `__index`, `__title`, `__brand`, `__year`, `__time`, `__snaps`, `__snap` (invisible snap points, one per row, that never move) |
 | `awards`, `award` | awards | `award__text`, `__ceremony`, `__category`, `__work`, `__image`, `__year` |
 | `merch-reel` | merch page | `__stage`, `__stack`, `__card`, `__run` |
-| `product-strip` | product page | `__stage`, `__track`, `__card`, `__run` |
+| `product-strip` | product page. A row on desktop, a column on phone; the merch pile stays behind, faded | `__stage`, `__pile`, `__ghost`, `__track`, `__card`, `__run` |
 | `about-panel`, `team`, `team-member` | About panel in the header. There is no /about route | `about-panel__head`, `__title`, `__tabs`, `__tab`, `__close`, `__text`, `__team-link`, `__contact`, `team__list`, `team-member__name`, `__image`, `__card`, `__position`, `__description`, `__track`, `__track-label` |
 | `mirror` | Hidden /mirror page, opened by three quick clicks on the header logo. No header, footer or router | `__canvas`, `__video`, `__logo`, `__bar`, `__enter`, `__toggle`, `__slash`, `__close` |
 | `page-title`, `empty-message`, `rich-text` | Shared | none |

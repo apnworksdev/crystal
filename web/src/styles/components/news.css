@@ -1,7 +1,8 @@
 /* News: a panel beside the logo, centered on the header row. A head bar with
    the close button, then the current item's title with the arrows, then its
-   pictures. The first picture of the item sets --news-ratio (and thus the
-   window size); scrolling pictures inside the item does not. It opens like
+   pictures. The window is as wide as an About or Team window (--news-w); the
+   first picture of the item sets --news-ratio, which sets only the height, up
+   to --news-image-h. Scrolling pictures inside the item changes neither. It opens like
    About: it grows sideways out of the header row as a strip (--news-open), so
    the menu beside it moves along instead of jumping, then unfolds up and down
    (--news), then its contents fade in. Closing runs it backwards. */
@@ -32,8 +33,11 @@
 }
 
 .news-panel {
+  /* The tallest the picture may get; a taller picture is cropped to this. */
   --news-image-h: min(64dvh, 46rem);
   --news-ratio: 0.75;
+  /* Same width as the About and Team windows (--about-col, about.css), opened or not. */
+  --news-w: var(--about-col, min(22rem, calc((100vw - var(--margin) * 2 - 8rem) / 2)));
 }
 
 .news-panel[hidden] {
@@ -65,7 +69,7 @@
 }
 
 .site-header[data-news] .news-panel[data-news-panel]:not([hidden]) {
-  --news-full: calc(var(--news-image-h) * var(--news-ratio) + var(--inline-gap) * 2);
+  --news-full: var(--news-w);
   position: relative;
   z-index: 1;
   align-self: center;
@@ -199,22 +203,23 @@
   padding: 0 var(--inline-gap) var(--inline-gap);
 }
 
-/* Frame sized to the item's first picture (--news-ratio). Pictures inside scroll. */
+/* The frame is the window's width; its height follows the item's first picture
+   (--news-ratio), up to --news-image-h. The pictures scroll inside it. */
 .news-panel__image {
   position: relative;
   display: block;
+  height: min(calc((var(--news-full) - var(--inline-gap) * 2) / var(--news-ratio)), var(--news-image-h));
   overflow: hidden;
-  aspect-ratio: var(--news-ratio);
 }
 
 .news-panel__photos {
   display: flex;
   flex-direction: column;
+  gap: 1px;
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-snap-type: y mandatory;
   scrollbar-width: none;
 }
 
@@ -222,12 +227,12 @@
   display: none;
 }
 
+/* Each picture keeps its own shape (its width and height attributes reserve the space
+   before it loads) and they scroll freely, 1px apart. Only the first one sets the frame. */
 .news-panel__photos img {
   flex: none;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  scroll-snap-align: start;
+  height: auto;
 }
 
 /* About keeps this same panel beside its windows; no remount, no restyle. */
@@ -290,7 +295,9 @@ body[data-page='archive'] .site-header[data-news]:not([data-about]) .news-panel:
 
   .news-panel__body {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
+    min-height: 0;
   }
 
   .news-panel__bar {
@@ -319,8 +326,46 @@ body[data-page='archive'] .site-header[data-news]:not([data-about]) .news-panel:
     padding: var(--inline-gap) var(--inline-gap) 0;
   }
 
+  /* Phone: the pictures are shown whole, at their own shape, one under the other, and the
+     panel scrolls through them. Only desktop sizes the window to the first picture. */
+  .site-header[data-news] .news-panel[data-news-panel]:not([hidden]) {
+    --news-full: var(--news-w);
+  }
+
+  .news-panel__images {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: calc(100dvh - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+
+  .news-panel__images::-webkit-scrollbar {
+    display: none;
+  }
+
+  .news-panel__image {
+    aspect-ratio: auto;
+    overflow: visible;
+  }
+
+  .news-panel__photos {
+    gap: var(--inline-gap);
+    height: auto;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .news-panel__photos img {
+    height: auto;
+    object-fit: initial;
+    scroll-snap-align: none;
+  }
+
   /* These share the header row with the panel and would sit on top of it. */
-  .site-header[data-news]:not([data-news-closing]) :is(.site-header__views, .site-header__product-title, .site-header__product) {
+  .site-header[data-news]:not([data-news-closing]) :is(.site-header__views, .site-header__product-title, .site-header__product, .site-header__context) {
     visibility: hidden;
   }
 }

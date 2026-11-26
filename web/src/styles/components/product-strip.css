@@ -1,14 +1,25 @@
-/* Product page: a sideways scroll or a drag moves the pictures. A vertical scroll
-   moves the page down to the footer. The current picture sits in the center.
-   Neighbors stay cut off at the sides. */
+/* Product page: any scroll or a drag moves the pictures, and they loop. The current
+   picture sits in the center, the same size as its card in the merch pile, and the rest of
+   the pile stays behind it, blurred and nearly gone. Desktop: the pictures run in a row and
+   the neighbours are cut off at the sides. Phone: they run in a column, cut off top and
+   bottom. */
+
+/* Behaviour: the page is one screen and does not scroll, so the footer is never reached.
+   Every scroll goes to the strip instead (product-strip.js). Same as Merch. */
+body:has([data-product-strip]) {
+  height: 100dvh;
+  overflow: hidden;
+}
 
 /* Behaviour: the strip is a sideways scroller. The stage stays put (sticky) while the
    run behind it gives the scroll its length, and product-strip.js turns the scroll
-   position into the track's movement. Vertical scrolls pass through to the page. */
+   position into the track's movement. */
 .product-strip {
   display: flex;
   height: 100dvh;
-  overflow-x: auto;
+  /* Behaviour: product-strip.js moves the strip. Native sideways scrolling also took the
+     drift of vertical swipes, so the pictures twitched. */
+  overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
@@ -21,6 +32,16 @@
 
 .product-strip:active {
   cursor: grabbing;
+}
+
+/* No tap flash on the pictures: it looked odd on a phone. */
+.product-strip {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.product-strip:focus,
+.product-strip:focus-visible {
+  outline: none;
 }
 
 /* Behaviour: hidden until the strip script has centred the first picture (product-strip.js sets
@@ -51,71 +72,80 @@
 .product-strip__track {
   display: flex;
   align-items: center;
-  gap: clamp(3rem, 12vw, 8rem);
+  gap: 27.5vh;
   width: max-content;
   will-change: transform;
 }
 
+/* The merch pile behind the pictures (ProductStrip.astro places each card). */
+.product-strip__pile {
+  position: absolute;
+  /* Under the pictures. The stage (sticky) keeps it above the page background. */
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.product-strip__ghost {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max-content;
+}
+
+/* Same sizes as the merch pile (merch-reel.css), so each picture is as big as its card
+   there: the base width times the product's size, never wider than the screen. */
+.product-strip__card,
+.product-strip__ghost {
+  --card-w: min(min(62.9vw, 44vh) * var(--size, 1), 100vw - var(--margin) * 2);
+  width: var(--card-w);
+}
+
 .product-strip__card {
+  position: relative;
   margin: 0;
   flex: none;
-  width: max-content;
-  max-width: min(52vw, 40rem);
 }
 
-.product-strip__card {
-  --card-max-width: min(52vw, 40rem);
-  --card-max-height: 70vh;
-}
-
+.product-strip__ghost img,
 .product-strip__card img {
   display: block;
-  width: auto;
+  width: 100%;
   height: auto;
-  max-width: var(--card-max-width);
-  max-height: var(--card-max-height);
   pointer-events: none;
 }
 
 /* The ratio is known before the file arrives, so the frame already has its size and the
    row does not shift while it loads. Padding-bottom keeps the shape (older browsers lack
    aspect-ratio); the picture fills the frame. */
-.product-strip__card[data-ratio] {
-  position: relative;
-  width: min(var(--card-max-width), calc(var(--card-max-height) * var(--ratio)));
-}
-
-.product-strip__card[data-ratio]::before {
+.product-strip__card[data-ratio]::before,
+.product-strip__ghost[data-ratio]::before {
   content: '';
   display: block;
   padding-bottom: calc(100% / var(--ratio));
 }
 
+.product-strip__ghost[data-ratio] img,
 .product-strip__card[data-ratio] img {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
   height: 100%;
-  max-width: none;
-  max-height: none;
 }
 
-@media (max-width: 40rem) {
-  .product-strip__card {
-    --card-max-width: min(78vw, 40rem);
-    --card-max-height: 50vh;
-    max-width: min(78vw, 40rem);
+/* Phone: the pictures run in a column (product-strip.js moves it up and down). */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .product-strip__track {
+    flex-direction: column;
+    width: auto;
+    height: max-content;
   }
 }
 
-/* Behaviour: on touch screens product-strip.js moves the strip one picture per sideways
-   swipe. Vertical swipes are left to the browser, so the page still scrolls to the footer. */
+/* Behaviour: on touch screens product-strip.js moves the strip one picture per swipe, up
+   or sideways, so the browser's own panning is turned off here. */
 @media (pointer: coarse) {
-  /* iPhone Safari still scrolled the strip sideways itself, on top of the script, so the
-     picture moved twice. Hidden overflow leaves only the script's scrollLeft. */
   .product-strip {
-    overflow-x: hidden;
-    touch-action: pan-y;
+    touch-action: none;
   }
 }

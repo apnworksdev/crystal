@@ -7,8 +7,10 @@
 //
 // The bar and the rows share one horizontal scroll. The bar eases open on arrival and
 // shut before a section change. Opening the menu runs the list to its end, where the
-// footer rests under the header; closing runs it back to the row it was on. The list
-// does not track the bar while the menu is open — that was the lag.
+// footer rests under the header; closing runs it back to the row it was on. While the
+// menu grows or folds, the list follows the bar frame by frame (followMenu). It reads the
+// bar's live size once a frame and never re-measures the open layout then, which switched
+// the bar's transition off and was the lag.
 
 let scrollEl = null;
 let headerEl = null;
@@ -75,7 +77,8 @@ function align() {
   // About hides the bar. Measuring it then would resize the header, fire the observer
   // again and loop every frame until About closes.
   if (header.hasAttribute('data-about')) return;
-  // Menu open: leave the list alone. Resizing it with the shrinking columns was the lag.
+  // Menu open: followMenu keeps the list with the bar. Measuring the open layout here would
+  // switch the bar's transition off mid-motion.
   if (header.hasAttribute('data-open')) return;
 
   const { inset, width, track } = openLayout(header, columns);
@@ -86,6 +89,47 @@ function align() {
   scroll.style.setProperty('--archive-columns-width', `${Math.round(width)}px`);
   scroll.style.setProperty('--archive-track', `${Math.round(track)}px`);
 }
+
+/* ---------- Following the menu ---------- */
+
+let followFrame = 0;
+let followUntil = 0;
+
+/** The bar as it is drawn this frame. Offsets ignore the sideways-scroll transform. */
+function followBar() {
+  const header = headerEl;
+  const scroll = scrollEl;
+  const columns = header?.querySelector('[data-archive-columns]');
+  if (!header || !scroll || !columns || !header.isConnected) return;
+  // The bar is hidden behind About, eases open or shut, or folds with a section change:
+  // those have their own measuring.
+  if (header.hasAttribute('data-about') || endTween || folding) return;
+  if (!header.classList.contains('is-archive-open')) return;
+  const inset = Math.round(header.offsetLeft + columns.offsetLeft);
+  const width = Math.round(columns.offsetWidth);
+  const track = Math.round(header.offsetLeft + header.offsetWidth);
+  const key = `${inset}|${width}|${track}`;
+  if (key === lastAlign) return;
+  lastAlign = key;
+  scroll.style.setProperty('--archive-inset', `${inset}px`);
+  scroll.style.setProperty('--archive-columns-width', `${width}px`);
+  scroll.style.setProperty('--archive-track', `${track}px`);
+}
+
+/** The menu is opening or closing (header.js): the rows keep the bar's width as it moves. */
+function followMenu() {
+  if (document.body.dataset.page !== 'archive' || !headerEl) return;
+  // Longer than the slowest menu motion, so the rows end where the bar ends.
+  followUntil = performance.now() + 1200;
+  if (followFrame) return;
+  const tick = (now) => {
+    followBar();
+    followFrame = now < followUntil && document.body.dataset.page === 'archive' ? requestAnimationFrame(tick) : 0;
+  };
+  followFrame = requestAnimationFrame(tick);
+}
+
+document.addEventListener('crystal:menu-motion', followMenu);
 
 let lastShift = '';
 
@@ -292,6 +336,8 @@ function detach() {
   above = null;
   if (layoutFrame) cancelAnimationFrame(layoutFrame);
   layoutFrame = 0;
+  if (followFrame) cancelAnimationFrame(followFrame);
+  followFrame = 0;
   lastAlign = '';
   lastShift = '';
   scrollEl = null;
@@ -380,7 +426,7 @@ export function setUpArchive() {
   const columns = headerEl.querySelector('[data-archive-columns]');
   if (columns && typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(() => {
-      // Skip while the menu is open: the columns shrink, but the list stays put.
+      // Skip while the menu is open: followMenu keeps the list with the shrinking columns.
       if (headerEl?.hasAttribute('data-open') || glide) return;
       scheduleLayout();
     });
