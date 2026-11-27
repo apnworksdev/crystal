@@ -30,6 +30,8 @@ const FRAME_MS = 1000 / 60;
 // The target never runs further ahead than this, in pictures: a burst of fast scrolling
 // keeps the movement going at a pace the eye can follow, instead of spinning through.
 const MAX_LEAD = 2;
+// Fewest cards in the loop, so one only swaps sides well off screen.
+const MIN_CARDS = 8;
 // Same query as the phone blocks in the stylesheets (header.js `phone`).
 const phone = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -84,15 +86,17 @@ function draw() {
   const column = vertical();
   const gap = pitch() * (2 - open);
   const screen = column ? root.clientHeight : root.clientWidth;
-  // With one picture there are only three cards, and the far ones come round behind the
-  // screen: hide them before they swap sides (the reference's 1.45).
-  const reach = total <= 3 ? 1.45 : total / 2 - 0.05;
+  // A card swaps sides at the far end of the loop: hidden just before. There are always
+  // enough (MIN_CARDS) for that to happen well off screen.
+  const reach = total / 2 - 0.05;
   cards.forEach((card, k) => {
     const s = loopOffset(k, shown, total);
     const middle = Math.abs(s) < 0.5;
     const offset = Math.round(s * gap);
     const size = column ? card.offsetHeight : card.offsetWidth;
-    const onScreen = Math.abs(offset) - size / 2 < screen / 2;
+    // Drawn until a whole picture past the edge: the stage's height can differ from what a
+    // phone shows (Safari's bars), and a picture must never vanish while still in view.
+    const onScreen = Math.abs(offset) - size / 2 < screen / 2 + size;
     const visible = open > 0.001 && Math.abs(s) < reach && onScreen;
     card.style.visibility = visible || middle ? 'visible' : 'hidden';
     // The middle picture is where the front product was: it stays. The others fade in as they come.
@@ -238,10 +242,15 @@ function onPointerUp(event) {
   suppressClick = true;
   window.setTimeout(() => (suppressClick = false), 50);
   const stale = event.timeStamp - lastT > 100;
-  if (!stale && event.type !== 'pointercancel' && !reducedMotion.matches) {
-    fling = { speed };
-    wake();
-  } else snapSoon();
+  const throwSpeed = !stale && event.type !== 'pointercancel' && !reducedMotion.matches ? speed : 0;
+  // Where the throw would coast to (per frame it keeps FLING_DECAY of its speed), rounded to
+  // a picture at once: one ease lands it centred. Coasting first stopped off centre and the
+  // snap pulled it in afterwards.
+  const carry = (throwSpeed * FRAME_MS) / (1 - FLING_DECAY) / pitch();
+  fling = null;
+  window.clearTimeout(snapTimer);
+  target = Math.round(Math.max(shown - MAX_LEAD, Math.min(shown + MAX_LEAD, target + carry)));
+  wake();
 }
 
 /** A click on a neighbour brings it to the middle. */
@@ -283,21 +292,23 @@ const routed = () => Boolean(document.querySelector('[name="astro-view-transitio
 const trim = (pathname) => pathname.replace(/\/+$/, '');
 
 /**
- * Leaving for the merch page: the pictures run back to the first one (the one the pile
- * shows), the others slide out past the edges and the pile comes back into focus. The
- * merch page then opens with this product in front (merch-reel.js).
+ * Leaving for the merch page: the picture on screen stays, the others slide out past the
+ * edges and the pile comes back into focus. The merch page then opens with this product in
+ * front, showing that same picture (merch-reel.js). (Running back to the first picture
+ * spun through the others on the way out.)
  */
-function leaveTo(pathname) {
+// `from`: the product being left. With Back, the address has already changed to /merch.
+function leaveTo(pathname, from = location.pathname) {
   if (!root?.isConnected || leaving || reducedMotion.matches || !routed()) return;
   if (trim(pathname) !== '/merch' || !total) return;
   leaving = true;
   drag = null;
   fling = null;
   window.clearTimeout(snapTimer);
-  // The nearest first picture.
-  const rest = Math.round(target);
-  const back = loopOffset(0, rest, count);
-  target = rest + back;
+  // The nearest whole picture: where it already is, or just about.
+  target = Math.round(target);
+  const middle = cards[((target % total) + total) % total]?.querySelector('img');
+  const picture = middle ? { src: middle.currentSrc || middle.src, ratio: middle.naturalWidth / middle.naturalHeight || 0 } : null;
   animateOpen(0);
   // The page changes once the pictures are where the pile takes over. A background tab
   // never runs the frames, so a timer stands in.
@@ -306,7 +317,7 @@ function leaveTo(pathname) {
     window.setTimeout(resolve, duration + 100);
   });
   // The merch page's code is fetched meanwhile, so it is placed the moment it arrives.
-  handOff(pathname, { from: 'product', slug: location.pathname }, Promise.all([done, import('./merch-reel.js')]));
+  handOff(pathname, { from: 'product', slug: from, picture }, Promise.all([done, import('./merch-reel.js')]));
 }
 
 // Before page.js's own click handler (window runs before document in the capture phase),
@@ -329,7 +340,7 @@ window.addEventListener(
   'astro:before-preparation',
   (event) => {
     checkHandoff(event.to.pathname);
-    if (!handoffLeave()) leaveTo(event.to.pathname);
+    if (!handoffLeave()) leaveTo(event.to.pathname, event.from.pathname);
   },
   true,
 );
@@ -362,6 +373,19 @@ export function setUpProductStrip() {
   duration = motionMs();
   cards = [...root.querySelectorAll('[data-product-card]')];
   count = root.querySelectorAll('[data-product-card][data-copy="1"]').length;
+  // A product with one or two pictures has only three to six cards: the far ones swapped
+  // sides close to the screen, so they were hidden early. Repeat whole sets until enough.
+  const track = root.querySelector('[data-product-track]');
+  const set = cards.filter((card) => card.dataset.copy === '0');
+  while (track && set.length && cards.length < MIN_CARDS) {
+    set.forEach((card) => {
+      const copy = card.cloneNode(true);
+      copy.dataset.copy = 'extra';
+      copy.querySelector('img')?.removeAttribute('fetchpriority');
+      track.append(copy);
+      cards.push(copy);
+    });
+  }
   total = cards.length;
   ghosts = [...root.querySelectorAll('[data-ghost]')].map((element) => ({
     element,

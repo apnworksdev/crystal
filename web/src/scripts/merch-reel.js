@@ -321,6 +321,15 @@ export function setUpMerchReel() {
   const list = cards();
   const from = arrival?.slug ? list.findIndex((card) => trim(new URL(card.href, location.href).pathname) === trim(arrival.slug)) : -1;
   shown = target = Math.max(0, from);
+  // It shows the picture it was left on, not its first one, until the page changes.
+  const picture = from >= 0 ? arrival?.picture : null;
+  const image = picture?.src ? list[from].querySelector('img') : null;
+  if (image) {
+    image.removeAttribute('srcset');
+    image.src = picture.src;
+    // Another shot of the same product may be a different shape: it fits the card whole.
+    image.style.objectFit = 'contain';
+  }
 
   if (list.length > 1) {
     // Not passive: the pile takes the wheel. Only bound while Merch is open.

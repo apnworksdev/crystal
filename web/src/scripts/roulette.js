@@ -254,6 +254,7 @@ function updateLevels(api) {
       shape: shapeScale(box?.offsetWidth || 0, box?.offsetHeight || 0),
       scale: 1,
       shift: 0,
+      shown: false,
     };
   });
 
@@ -303,7 +304,7 @@ function updateLevels(api) {
   // A picture with no size yet must not join the row. Several of those were
   // packed on the same spot, then grew on top of each other once they loaded.
   const ordered = items
-    .filter((item) => item.card && item.distance <= 2.4 && item.boxW >= 2 && item.boxH >= 2)
+    .filter((item) => item.card && item.boxW >= 2 && item.boxH >= 2)
     .sort((a, b) => a.units - b.units);
   if (ordered.length) {
     const packed = new Array(ordered.length);
@@ -330,9 +331,13 @@ function updateLevels(api) {
       focusPacked = packed[nearest];
     }
 
+    // Every card that reaches the screen shows, and one more each side, ready to come in.
+    // (A fixed 2.4 steps out left the edge empty on a wide screen, or mid-step.)
     ordered.forEach((item, j) => {
       const center = focusX + (packed[j] - focusPacked);
       item.shift = center - item.naturalCenter;
+      const reach = item.visual * 1.5;
+      item.shown = center + reach > viewRect.left && center - reach < viewRect.right;
     });
   }
 
@@ -344,15 +349,17 @@ function updateLevels(api) {
     item.slide.classList.toggle('is-active', inFront);
 
     if (!item.card) return;
-    item.card.style.visibility = item.distance > 2.4 ? 'hidden' : '';
+    item.card.style.visibility = item.shown ? '' : 'hidden';
     item.card.style.setProperty('--roulette-shift', `${item.shift.toFixed(2)}px`);
     item.card.tabIndex = inFront ? 0 : -1;
+    // Copies are only there to fill the loop: read out only when one is the card in front.
+    if (item.slide.hasAttribute('data-roulette-copy')) item.slide.toggleAttribute('aria-hidden', !inFront);
   });
 
   // The first placement is in ideal pixels. A narrow centre picture leaves a
   // wide empty slide, so a fraction of a pixel of rounding opens a visible
   // seam. Measure the painted edges and pull each neighbour back to 1px.
-  tightenGaps(ordered);
+  tightenGaps(ordered.filter((item) => item.shown));
 }
 
 function onSlideClick(event) {
@@ -396,6 +403,37 @@ function onKeyDown(event) {
   }
 }
 
+// Copies of the projects, so the flat row Embla loops is about this many screens wide.
+// The row is drawn squeezed towards the middle, so a slide Embla thinks is off screen can
+// still show at the edge: with too few, it moved across while visible and left a gap.
+const ROW_SCREENS = 4;
+const MAX_SETS = 12;
+let copyVideos;
+
+/** Repeats the projects, whole sets at a time, until the row is wide enough to loop unseen. */
+function fillRow(viewport) {
+  const track = viewport.querySelector('.project-roulette__track');
+  if (!track) return false;
+  const originals = [...track.children].filter((slide) => !slide.hasAttribute('data-roulette-copy'));
+  const setWidth = originals.reduce((sum, slide) => sum + slide.offsetWidth, 0);
+  if (!originals.length || setWidth < 1) return false;
+  const need = ROW_SCREENS * Math.max(viewport.clientWidth, 1);
+  let sets = track.children.length / originals.length;
+  let added = false;
+  while (setWidth * sets < need && sets < MAX_SETS) {
+    originals.forEach((slide) => {
+      const copy = slide.cloneNode(true);
+      copy.setAttribute('data-roulette-copy', '');
+      track.append(copy);
+      // page.js only starts the videos that were there on arrival.
+      copy.querySelectorAll('video[data-autoplay]').forEach((video) => copyVideos?.observe(video));
+    });
+    sets += 1;
+    added = true;
+  }
+  return added;
+}
+
 export function setUpRoulette() {
   if (root) {
     root.removeEventListener('wheel', onWheel);
@@ -408,6 +446,13 @@ export function setUpRoulette() {
 
   embla?.destroy();
   embla = undefined;
+  copyVideos?.disconnect();
+  copyVideos = reducedMotion.matches
+    ? undefined
+    : new IntersectionObserver(
+        (entries) => entries.forEach(({ target, isIntersecting }) => (isIntersecting ? target.play().catch(() => {}) : target.pause())),
+        { rootMargin: '200px' },
+      );
   pictureObserver?.disconnect();
   pictureObserver = undefined;
   frontIndex = -1;
@@ -419,6 +464,7 @@ export function setUpRoulette() {
   const viewport = root.querySelector('.project-roulette__viewport');
   if (!viewport) return;
 
+  fillRow(viewport);
   embla = EmblaCarousel(
     viewport,
     {
@@ -465,6 +511,15 @@ export function setUpRoulette() {
   // The row stays hidden until Embla has placed the slides, so it never shows unarranged.
   root.dataset.ready = '';
 }
+
+// A wider window needs a longer row: add sets and let Embla measure again.
+window.addEventListener('resize', () => {
+  const viewport = root?.isConnected ? root.querySelector('.project-roulette__viewport') : null;
+  if (viewport && embla && fillRow(viewport)) {
+    embla.reInit();
+    root.querySelectorAll('[data-roulette-copy] .project-roulette__media :is(img, video, iframe)').forEach((picture) => pictureObserver?.observe(picture));
+  }
+});
 
 document.addEventListener('click', onSlideClick, true);
 document.addEventListener('keydown', onKeyDown);

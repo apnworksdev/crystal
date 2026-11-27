@@ -38,6 +38,10 @@ body:has([data-reel]:not([hidden])) {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  /* The line is shorter than the letters (90%), and the overflow that cuts a long title also
+     cut the descenders (p, g). Room for them, taken back from the layout so nothing moves. */
+  padding-block: 0.08em 0.2em;
+  margin-block: -0.08em -0.2em;
   transition: opacity 0.35s ease;
 }
 

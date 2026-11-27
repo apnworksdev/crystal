@@ -83,7 +83,7 @@ body:has([data-product-strip]) {
    there: the base width times the product's size, never wider than the screen. */
 .product-strip__card,
 .product-strip__ghost {
-  --card-w: min(min(62.9vw, 44vh) * var(--size, 1), 100vw - 24px);
+  --card-w: min(min(62.9vw, 64vh) * var(--size, 1), 100vw - 24px);
   width: var(--card-w);
 }
 

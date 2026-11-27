@@ -552,7 +552,30 @@ function closeAboutToNav(moveFocus) {
   aboutMotion = window.setTimeout(endAboutClose, grow * 2 + 100);
 }
 
+// A product handing its title back to the Merch page has already slid it into place
+// (product.js): the name shows at once there instead of growing out of nothing.
+let projectAtOnce = '';
+
+/** The next time the header shows `title` as the project, it shows without motion. */
+export function showHeaderProjectAtOnce(title) {
+  projectAtOnce = title;
+}
+
 function paintHeaderProject(link, title, href) {
+  if (projectAtOnce && projectAtOnce === title) {
+    projectAtOnce = '';
+    link.hidden = false;
+    link.style.transition = 'none';
+    link.href = href;
+    link.textContent = title;
+    link.style.color = '';
+    link.style.width = 'max-content';
+    link.style.width = `${link.getBoundingClientRect().width}px`;
+    link.offsetWidth;
+    link.style.transition = '';
+    return;
+  }
+  projectAtOnce = '';
   const fromWidth = link.hidden ? 0 : link.getBoundingClientRect().width;
   const fadeIn = !link.hidden && !reducedMotion.matches;
 

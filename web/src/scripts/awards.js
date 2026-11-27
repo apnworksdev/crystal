@@ -85,6 +85,39 @@ function measure() {
   updateCentred();
 }
 
+// The mouse, while it is over the list. The list rolls under a still pointer, and browsers
+// only update :hover when the pointer itself moves, so the hovered entry got stuck and the
+// one now under the pointer showed nothing. The entry under it is marked on every move.
+let pointer = null;
+let hovered = null;
+
+function setHovered(award) {
+  if (award === hovered) return;
+  hovered?.removeAttribute('data-hovered');
+  award?.setAttribute('data-hovered', '');
+  hovered = award;
+}
+
+function updateHovered() {
+  if (!pointer || !scroller) {
+    setHovered(null);
+    return;
+  }
+  const text = document.elementFromPoint(pointer.x, pointer.y)?.closest('.award__text');
+  setHovered(text && scroller.contains(text) ? text.closest('.award') : null);
+}
+
+function onPointerMove(event) {
+  if (event.pointerType !== 'mouse') return;
+  pointer = { x: event.clientX, y: event.clientY };
+  updateHovered();
+}
+
+function onPointerLeave() {
+  pointer = null;
+  setHovered(null);
+}
+
 function write(top) {
   written = top;
   scroller.scrollTop = top;
@@ -119,6 +152,7 @@ function onScroll() {
     normalize();
   }
   updateCentred();
+  updateHovered();
 }
 
 function onScrollEnd() {
@@ -193,6 +227,8 @@ function tearDown() {
   ac?.abort();
   ac = null;
   pauses.clear();
+  pointer = null;
+  setHovered(null);
   scroller = null;
   track = null;
   list = null;
@@ -228,6 +264,8 @@ export function setUpAwards() {
   scroller.addEventListener('focusin', onFocusIn, { signal });
   scroller.addEventListener('focusout', onFocusOut, { signal });
   scroller.addEventListener('wheel', onInput, { signal, passive: true });
+  scroller.addEventListener('pointermove', onPointerMove, { signal, passive: true });
+  scroller.addEventListener('pointerleave', onPointerLeave, { signal, passive: true });
   document.addEventListener('keydown', onKeyDown, { signal });
   scroller.addEventListener('touchstart', onTouchStart, { signal, passive: true });
   scroller.addEventListener('touchend', onTouchEnd, { signal, passive: true });

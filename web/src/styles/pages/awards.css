@@ -93,7 +93,8 @@ body[data-page='awards'] {
   object-fit: cover;
 }
 
-.award__text:hover ~ .award__image,
+/* data-hovered, not :hover: the list rolls under a still pointer (awards.js). */
+.award[data-hovered] .award__image,
 .award__text:focus ~ .award__image {
   opacity: 1;
 }
@@ -114,7 +115,7 @@ body[data-page='awards'] {
     padding-inline: var(--margin);
   }
 
-  .award__text:hover ~ .award__image,
+  .award[data-hovered] .award__image,
   .award__text:focus ~ .award__image {
     opacity: 0;
   }

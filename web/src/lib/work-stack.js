@@ -6,8 +6,11 @@
 // the next one comes forward behind it. The position is continuous and endless: after the last card comes
 // the first.
 
-/** How far up each card behind sits, in pixels. */
-export const RISE = 25;
+/** How far up each card behind sits, in pixels. Less than the reference's 25: the back of
+ *  the pile reached too high above the front card. */
+export const RISE = 14;
+/** The 25px grid the desktop front card sits on (stackTop), as in the reference. */
+const PITCH = 25;
 /** How far a card that has passed drops, in pixels per step. */
 export const DROP = 140;
 /** Every card covers about this many square pixels, so shapes differ but weight stays even. */
@@ -99,5 +102,5 @@ export function cardSize(ratio, { phone = false, width = 1440, height = 1000, ro
 
 /** Desktop: the front card's top, in viewport pixels. On the 25px pitch above the header line. */
 export function stackTop(width, height) {
-  return Math.round(height / 2 - 12) - Math.round(8 * stackGrow(width, height)) * RISE;
+  return Math.round(height / 2 - 12) - Math.round(8 * stackGrow(width, height)) * PITCH;
 }

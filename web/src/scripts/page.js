@@ -263,7 +263,7 @@ document.addEventListener('click', (event) => {
   event.preventDefault();
   // About folds away first, then the header changes section as usual.
   const header = leaveAbout()
-    .then(() => leaveProduct())
+    .then(() => leaveProduct(url.pathname))
     .then(() => prepareSectionLeave(url.pathname));
   Promise.all([header, fadeContentOut(), fadePlayerOut()]).then(([go]) => {
     if (!go) return;
@@ -282,7 +282,7 @@ document.addEventListener('astro:before-preparation', (event) => {
   if (cover) return;
   const load = event.loader;
   // Back and forward skip the click handler, so the header plays its leave motion here.
-  const header = clicked ? Promise.resolve() : leaveProduct().then(() =>
+  const header = clicked ? Promise.resolve() : leaveProduct(event.to.pathname).then(() =>
         prepareSectionLeave(event.to.pathname, event.from.pathname),
       );
   event.loader = async () => {

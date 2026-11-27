@@ -4,6 +4,8 @@
 // The Merch link and the product title share one bubble (one grid cell). Arriving on a product
 // grows that bubble from "Merch" to the title, and leaving shrinks it back before the page changes.
 
+import { showHeaderProjectAtOnce } from './header.js';
+
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 // The shared expo-out (--ease-out).
 const EASING = 'cubic-bezier(0.19, 1, 0.22, 1)';
@@ -17,6 +19,19 @@ const phone = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: 
 
 let leaving = null;
 let morph = null;
+// Merch shows the front product's name beside its tab. Where it sat just before the page
+// changed, so the product title can slide on from there instead of growing from nothing.
+let merchName = null;
+// Animations holding the title where the Merch page will show the name, until it does.
+let handBack = null;
+
+document.addEventListener('astro:before-swap', () => {
+  const link = document.querySelector('[data-header-project]');
+  merchName =
+    document.querySelector('[data-merch-reel]') && link && !link.hidden && link.getClientRects().length
+      ? { text: link.textContent, left: link.getBoundingClientRect().left }
+      : null;
+});
 
 function parts() {
   return {
@@ -65,6 +80,22 @@ function growIn(title, buy) {
     title.animate([{ width: `${from}px` }, { width: `${to}px` }], { duration: ms, easing: EASING });
   }
   title.animate([{ color: 'transparent' }, { color: 'transparent', offset: 0.36 }, {}], { duration: ms });
+  if (shown(buy)) {
+    buy.animate([{ opacity: 0 }, { opacity: 0, offset: 0.36 }, { opacity: 1 }], { duration: ms, easing: EASING });
+  }
+}
+
+/** From Merch: the name beside the Merch tab slides over the tab and becomes the title. */
+function slideIn(title, buy, fromLeft) {
+  const ms = motionMs();
+  const dx = fromLeft - title.getBoundingClientRect().left;
+  const merch = title.parentElement?.querySelector(':scope > .site-header__link');
+  title.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: ms, easing: EASING });
+  // The tab stays under the sliding title and fades, instead of vanishing at once.
+  merch?.animate([{ visibility: 'visible', opacity: 1 }, { visibility: 'visible', opacity: 0 }], {
+    duration: ms * 0.6,
+    easing: EASING,
+  });
   if (shown(buy)) {
     buy.animate([{ opacity: 0 }, { opacity: 0, offset: 0.36 }, { opacity: 1 }], { duration: ms, easing: EASING });
   }
@@ -141,8 +172,12 @@ export function productMenuClosed() {
   growIn(title, buy);
 }
 
-/** Shrinks the title back to the Merch link and fades out the price row. Runs on the leaving page. */
-export function leaveProduct() {
+/**
+ * Shrinks the title back to the Merch link and fades out the price row. Runs on the leaving
+ * page. Going to Merch, the title slides back to where Merch shows the name, the tab fades
+ * in behind it, and Merch shows that name at once.
+ */
+export function leaveProduct(destination = '') {
   if (leaving) return leaving;
   const all = parts();
   const { title, buy } = all;
@@ -151,6 +186,27 @@ export function leaveProduct() {
   if (reducedMotion.matches || !shown(title)) {
     clear(all);
     return Promise.resolve();
+  }
+
+  const merch = title.parentElement?.querySelector(':scope > .site-header__link');
+  if (destination.replace(/\/+$/, '') === '/merch' && merch) {
+    const ms = motionMs();
+    const dx = merch.getBoundingClientRect().right + 1 - title.getBoundingClientRect().left;
+    const options = { duration: ms, easing: EASING, fill: 'forwards' };
+    const animations = [
+      title.animate([{ transform: 'none' }, { transform: `translateX(${dx}px)` }], options),
+      merch.animate([{ visibility: 'visible', opacity: 0 }, { visibility: 'visible', opacity: 1 }], options),
+    ];
+    if (shown(buy)) animations.push(buy.animate([{ opacity: 1 }, { opacity: 0 }], { ...options, duration: ms * 0.6 }));
+    showHeaderProjectAtOnce(title.textContent);
+    // Held there until Merch shows the name (setUpProduct), so the row never empties.
+    handBack = animations;
+    const finished = Promise.all(animations.map((animation) => animation.finished.catch(() => {})));
+    const timeout = new Promise((resolve) => window.setTimeout(resolve, ms * 0.56 + 80));
+    leaving = Promise.race([finished, timeout]).then(() => {
+      leaving = null;
+    });
+    return leaving;
   }
 
   const from = title.getBoundingClientRect().width;
@@ -174,6 +230,9 @@ export function leaveProduct() {
 }
 
 export function setUpProduct() {
+  // The new page is in place (Merch already shows the name): let go of the held title.
+  handBack?.forEach((animation) => animation.cancel());
+  handBack = null;
   const all = parts();
   const { source, title, buy, price, link, label } = all;
 
@@ -192,5 +251,9 @@ export function setUpProduct() {
   link.href = source.dataset.url || '#';
   if (label) label.textContent = ` ${name} (opens in a new tab)`;
   buy.hidden = false;
-  if (arriving) growIn(title, buy);
+  const from = merchName;
+  merchName = null;
+  if (!arriving) return;
+  if (from && from.text === name && !reducedMotion.matches) slideIn(title, buy, from.left);
+  else growIn(title, buy);
 }

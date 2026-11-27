@@ -179,8 +179,16 @@
   white-space: nowrap;
 }
 
-/* A title with a link underlines on hover. Added by Claude: restyle freely. */
+/* A title with a link underlines on hover; the X and the arrows take the menu links' hover
+   (white with a 1px red line). Added by Claude: restyle freely. */
 @media (hover: hover) {
+  :is(.news-panel__close, .news-panel__arrow):is(:hover, :focus-visible) {
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+    box-shadow: inset 0 0 0 1px var(--foreground-color);
+    outline: none;
+  }
+
   a.news-panel__item-title:is(:hover, :focus-visible) {
     text-decoration: underline;
     text-underline-offset: 0.15em;
