@@ -607,11 +607,16 @@ function paintHeaderProject(link, title, href) {
 }
 
 /** Shows a label in the bubble between the logo and the menu. */
+// Counts every change of the project name, so a delayed step meant for an older one
+// (closeHeaderProject) never clears a newer one.
+let projectTurn = 0;
+
 export function setHeaderProject(project) {
   const link = document.querySelector('[data-header-project]');
   if (!link) return;
 
   window.clearTimeout(titleTimer);
+  projectTurn += 1;
 
   const nextHref = project?.href || (project?.slug ? `/projects/${project.slug}` : '');
   if (!project?.title || !nextHref) {
@@ -625,6 +630,9 @@ export function setHeaderProject(project) {
 
   const nextTitle = project.title;
   if (!link.hidden && link.textContent === nextTitle && link.getAttribute('href') === nextHref) {
+    // Back to the name already there before a pending change had painted (a quick scroll
+    // back and forth on Merch): its text was faded out for that change and stayed invisible.
+    link.style.color = '';
     return;
   }
 
@@ -747,6 +755,7 @@ function swapClosedSection(header, from, to, generation) {
 function closeHeaderProject(header) {
   const link = header.querySelector('[data-header-project]');
   if (!link || link.hidden) return Promise.resolve();
+  const turn = projectTurn;
 
   const from = Math.ceil(link.getBoundingClientRect().width);
   link.style.transition = 'none';
@@ -761,7 +770,8 @@ function closeHeaderProject(header) {
 
   return delay(motionMs(header)).then(() => {
     padding?.cancel();
-    if (!link.isConnected || link.hidden) return;
+    // A new name was set meanwhile (the next page, or Merch again): it stays.
+    if (!link.isConnected || link.hidden || turn !== projectTurn) return;
     link.hidden = true;
     link.textContent = '';
     link.removeAttribute('href');

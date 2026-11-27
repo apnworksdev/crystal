@@ -98,17 +98,20 @@ function warmPageModules() {
   else window.setTimeout(warm, 2000);
 }
 
-// The content fades out before a section change and back in after it.
-const FADE_OUT = 160;
-// The new page settles on the shared expo-out (--ease-out), a little longer than a box grows.
-const FADE_IN = 600;
-const SETTLE_EASING = 'cubic-bezier(0.19, 1, 0.22, 1)';
+// The content fades out before a section change and back in after it. Both on an even
+// curve: on the expo-out the new page was half there in 80ms, which read as a cut.
+const FADE_OUT = 350;
+const FADE_IN = 700;
+const FADE_OUT_EASING = 'cubic-bezier(0.4, 0, 1, 1)';
+const SETTLE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 let contentOut = null;
 let fadeIn = false;
 let headerLeft = false;
 
+// <main>, not .site-scroll: the wrapper is display: contents on every page but the archive
+// (main.css), so its opacity never showed and pages changed in one cut.
 function content() {
-  return document.querySelector('.site-scroll');
+  return document.querySelector('main');
 }
 
 function fadeContentOut() {
@@ -120,12 +123,13 @@ function fadeContentOut() {
   if (!element || reducedMotion.matches) return Promise.resolve();
   const animation = element.animate([{ opacity: 1 }, { opacity: 0 }], {
     duration: FADE_OUT,
-    easing: 'ease-in',
+    easing: FADE_OUT_EASING,
     fill: 'forwards',
   });
+  // A background tab never runs the animation: the page change must not wait for it.
   contentOut = Promise.race([
     animation.finished.catch(() => {}),
-    new Promise((resolve) => window.setTimeout(resolve, 240)),
+    new Promise((resolve) => window.setTimeout(resolve, FADE_OUT + 80)),
   ]);
   return contentOut;
 }
