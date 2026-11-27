@@ -7,6 +7,11 @@
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 // The shared expo-out (--ease-out).
 const EASING = 'cubic-bezier(0.19, 1, 0.22, 1)';
+// Phone fades: an even curve (--ease-fold). On the expo-out they were nearly done in the
+// first frame, so the title, price and Buy seemed to vanish and pop back.
+const FADE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
+const FADE_OUT_MS = 300;
+const FADE_IN_MS = 400;
 // Same query as the phone blocks in the stylesheets.
 const phone = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)');
 
@@ -100,8 +105,8 @@ export function productMenuOpening(header) {
   // Phone: the menu column takes the title's place, so the title and the price row fade
   // where they are. pinProductMorph holds them there once the open menu has moved them.
   if (phone.matches) {
-    const ms = motionMs() * 0.6;
-    const options = { duration: ms, easing: EASING, fill: 'forwards' };
+    const ms = FADE_OUT_MS;
+    const options = { duration: ms, easing: FADE_EASING, fill: 'forwards' };
     const animations = [title.animate([{ opacity: 1 }, { opacity: 0 }], options)];
     if (!buy.hidden) animations.push(buy.animate([{ opacity: 1 }, { opacity: 0 }], options));
     const pins = [title, buy].map((element) => ({ element, box: element.getBoundingClientRect() }));
@@ -128,7 +133,7 @@ export function productMenuClosed() {
   // Two paths finish closing the menu. The title grows out once.
   if (title.getAnimations().length) return;
   if (phone.matches && !reducedMotion.matches) {
-    const options = { duration: motionMs(), easing: EASING };
+    const options = { duration: FADE_IN_MS, easing: FADE_EASING };
     title.animate([{ opacity: 0 }, { opacity: 1 }], options);
     if (!buy.hidden) buy.animate([{ opacity: 0 }, { opacity: 1 }], options);
     return;

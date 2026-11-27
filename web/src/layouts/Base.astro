@@ -2,6 +2,7 @@
 import { stegaClean } from '@sanity/client/stega';
 import { ClientRouter } from 'astro:transitions';
 import AboutPanel from '../components/AboutPanel.astro';
+import FooterLinks from '../components/FooterLinks.astro';
 import Logo from '../components/icons/Logo.astro';
 import NewsPanel from '../components/NewsPanel.astro';
 import headerFlipSource from '../scripts/header-flip.js?raw';
@@ -257,7 +258,7 @@ const pageKind = player
         <span>Year</span>
         <span>Time</span>
       </div>
-      <AboutPanel about={about} email={settings.email} news={settings.news ?? []} />
+      <AboutPanel about={about} email={settings.email} links={settings.links ?? []} news={settings.news ?? []} />
     </header>
     <script is:inline set:html={headerFlipClassic}></script>
     <script is:inline>
@@ -328,24 +329,7 @@ const pageKind = player
     </main>
 
     <footer class="site-footer">
-      <a class="site-footer__link" href="/privacy">Privacy Policy</a>
-      <a class="site-footer__link" href="/cookies">Cookies Policy</a>
-      <p class="site-footer__label">Contact</p>
-      {
-        settings.email && (
-          <form class="site-footer__form" action={`mailto:${stegaClean(settings.email)}`}>
-            <label class="sr-only" for="footer-email">Email</label>
-            <input id="footer-email" type="email" name="email" value={stegaClean(settings.email)} />
-            <span class="site-footer__rule" aria-hidden="true"></span>
-            <button type="submit">Submit</button>
-          </form>
-        )
-      }
-      {settings.links?.map((link) => (
-        <a class="site-footer__link" href={link.url} rel="me noopener">
-          {link.label}
-        </a>
-      ))}
+      <FooterLinks email={settings.email} links={settings.links ?? []} />
     </footer>
     </div>
 

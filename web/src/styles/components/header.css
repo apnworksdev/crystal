@@ -54,6 +54,12 @@
   text-transform: lowercase;
 }
 
+.site-header__logo svg {
+  position: relative;
+  top: -0.5px;
+  left: 1.5px;
+}
+
 .site-header__context {
   position: relative;
   display: flex;
@@ -643,8 +649,15 @@ body[data-page='project'] .site-header__name-title {
   line-height: 1;
 }
 
-body[data-page='project'] .site-header__name[data-open] .site-header__name-head {
-  border-bottom: 1px solid color-mix(in srgb, var(--background-color) 35%, transparent);
+/* Open, the title and the details are two blocks with a gap between them, not one block
+   with a line: the background moves from the name onto each of them. */
+body[data-page='project'] .site-header__name[data-open] {
+  gap: var(--small-gap);
+  background: transparent;
+}
+
+body[data-page='project'] .site-header__name[data-open] > :is(.site-header__name-head, .site-header__info) {
+  background: var(--foreground-color);
 }
 
 body[data-page='project'] .site-header__info {
@@ -774,6 +787,13 @@ body[data-page='archive'] .site-header__columns {
     opacity var(--transition-duration) linear;
 }
 
+/* Behaviour: while the bar eases open or shut, only the bar gives way. Otherwise the logo,
+   the section and the + were squeezed for a frame and grew back, as if the header were drawn
+   again. */
+body[data-page='archive'] .site-header:not([data-about]) > :is(.site-header__logo, .site-header__context, .site-header__nav, .site-header__toggle) {
+  flex-shrink: 0;
+}
+
 /* Behaviour: no padding while the bar is closed, so the closed header is as wide here as on
    every other page and does not snap when the page changes. */
 body[data-page='archive'] .site-header:not(.is-archive-open) .site-header__columns {
@@ -871,6 +891,16 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
   }
 }
 
+/* List and Stack: the one that isn't chosen fills on hover, as it will when chosen.
+   Added by Claude: restyle freely. */
+@media (hover: hover) {
+  .site-header__view[aria-pressed='false']:is(:hover, :focus-visible) {
+    background: var(--foreground-color);
+    color: var(--background-color);
+    outline: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   body[data-page='archive'] .site-header,
   body[data-page='archive'] .site-header__columns {
@@ -942,10 +972,12 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     align-items: flex-start;
   }
 
-  /* The open column wipes in row by row: top to bottom, or bottom to top where the
-     header is docked at the bottom. Each link unfolds on its own --bubble, on the shared
-     curve, one after another (--i sets the order), so every row eases into place. The
-     links keep their full width, so nothing grows sideways. */
+  /* Behaviour: the open column grows row by row away from the header row: down, or up
+     where the header is docked at the bottom (as in the reference). Each row's box grows
+     from nothing in width and height together on its own --bubble, on the shared curve,
+     one after another from the header row outward (--order); its label fades in once the
+     box is under way (--text-delay). Rows already showing never move. Closing folds the
+     rows from the far end back towards the header row, each label going with its box. */
   .site-header__links > :nth-child(1) { --i: 0; }
   .site-header__links > :nth-child(2) { --i: 1; }
   .site-header__links > :nth-child(3) { --i: 2; }
@@ -954,24 +986,33 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
 
   .site-header[data-open] .site-header__links .site-header__link,
   .site-header[data-open] .site-header__links .site-header__link[aria-current='page'] {
-    --shown: var(--bubble);
     --order: var(--i, 0);
-    width: var(--full, max-content);
+    width: calc(var(--full, 0px) * var(--bubble));
+    height: calc(var(--height-bubble) * var(--bubble));
     color: var(--background-color);
-    clip-path: inset(0 0 calc((1 - var(--shown)) * 100%) 0);
-    transition-delay: calc(var(--order) * var(--stagger)), 0s, 0s, 0s;
+    transition-delay:
+      calc(var(--order) * var(--stagger)),
+      calc(var(--order) * var(--stagger) + var(--text-delay)),
+      0s,
+      0s,
+      calc(var(--order) * var(--stagger));
+  }
+
+  /* Opening delays are only for the unfold. Once settled, hover moves at once. */
+  .site-header.is-settled[data-open]:not([data-closing]) .site-header__links .site-header__link {
+    transition-delay: 0s;
   }
 
   .site-header[data-closing] .site-header__links .site-header__link,
   .site-header[data-closing] .site-header__links .site-header__link[aria-current='page'] {
     --order: calc(4 - var(--i, 0));
     --close-delay: calc(var(--order) * var(--fold-stagger));
+    color: transparent;
     transition-delay: var(--close-delay), var(--close-delay), 0s, 0s, var(--close-delay);
   }
 
   body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-open] .site-header__links .site-header__link {
     --order: calc(4 - var(--i, 0));
-    clip-path: inset(calc((1 - var(--shown)) * 100%) 0 0 0);
   }
 
   body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-closing] .site-header__links .site-header__link {

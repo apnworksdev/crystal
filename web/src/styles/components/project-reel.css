@@ -1,4 +1,5 @@
-/* Work reel: the current picture is sharp. The next one sits behind it, blurred. */
+/* Work reel: the current picture is sharp. The next ones sit behind it, higher and blurred.
+   reel.js sizes and places every card (lib/work-stack.js); the page itself never scrolls. */
 
 body:has([data-reel]:not([hidden])) {
   height: 100dvh;
@@ -11,14 +12,11 @@ body:has([data-reel]:not([hidden])) {
 
 .project-reel {
   height: 100dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
+  overflow: hidden;
 }
 
 .project-reel__stage {
-  position: sticky;
-  top: 0;
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -26,10 +24,6 @@ body:has([data-reel]:not([hidden])) {
   height: 100dvh;
   padding: var(--margin);
   box-sizing: border-box;
-}
-
-.project-reel__run {
-  height: calc(var(--reel-steps) * 70vh);
 }
 
 .project-reel__brand,
@@ -47,6 +41,13 @@ body:has([data-reel]:not([hidden])) {
   transition: opacity 0.35s ease;
 }
 
+/* Behaviour: the words stay above the cards, which rise towards them on phone. */
+.project-reel__brand,
+.project-reel__title {
+  position: relative;
+  z-index: 1;
+}
+
 .project-reel[data-reel-words='hidden'] .project-reel__brand,
 .project-reel[data-reel-words='hidden'] .project-reel__title {
   opacity: 0;
@@ -58,6 +59,8 @@ body:has([data-reel]:not([hidden])) {
   width: 100%;
   height: 100%;
   min-height: 0;
+  /* Behaviour: keeps the cards' stacking order inside the stack, under the project cover. */
+  isolation: isolate;
 }
 
 .project-reel__card {
@@ -67,6 +70,7 @@ body:has([data-reel]:not([hidden])) {
   display: block;
   width: max-content;
   max-width: min(52vw, 40rem);
+  overflow: hidden;
   transform: translate(-50%, -50%);
   /* Behaviour: reel.js changes these every frame. Own layers keep the blur smooth. */
   will-change: transform, opacity, filter;
@@ -121,6 +125,7 @@ body[data-work-view='list'] .project-reel {
   height: 100%;
   max-width: none;
   max-height: none;
+  object-fit: cover;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -151,8 +156,8 @@ body[data-work-view='list'] .project-reel {
   }
 }
 
-/* Behaviour: on touch screens reel.js moves the reel one picture per swipe, so the
-   browser's own scrolling is turned off here. */
+/* Behaviour: on touch screens reel.js moves the stack with the finger, so the browser's
+   own panning is turned off here. */
 @media (pointer: coarse) {
   .project-reel {
     touch-action: none;

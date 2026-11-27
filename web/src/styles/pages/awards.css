@@ -1,6 +1,7 @@
-/* Awards: a freely scrollable column with a slow JS drift. Hover, focus or tap
-   on the award text shows its image and pauses the drift. The page is locked
-   like Work so the footer is not reachable by scroll. */
+/* Awards: a freely scrollable column that rolls like credits and loops both ways
+   (awards.js). Hover or focus on the award text shows its image; on phone the
+   entry at the centre of the screen shows it. The page is locked like Work so the
+   footer is not reachable by scroll. */
 
 body[data-page='awards'] {
   height: 100dvh;
@@ -25,7 +26,7 @@ body[data-page='awards'] {
   width: 100%;
 }
 
-/* Reduced motion: one list only, no drift (awards.js). */
+/* Reduced motion: one list only, no roll (awards.js). */
 .awards-scroller:not([data-awards-loop]) .awards[aria-hidden='true'] {
   display: none;
 }
@@ -93,8 +94,7 @@ body[data-page='awards'] {
 }
 
 .award__text:hover ~ .award__image,
-.award__text:focus ~ .award__image,
-.award[data-active] .award__image {
+.award__text:focus ~ .award__image {
   opacity: 1;
 }
 
@@ -107,9 +107,19 @@ body[data-page='awards'] {
   outline-offset: 4px;
 }
 
-/* Phone: no room for the side padding. */
+/* Phone: no room for the side padding. No hover either: the entry at the centre of
+   the screen shows its image (data-centred, set by awards.js). */
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
   .award__text {
     padding-inline: var(--margin);
+  }
+
+  .award__text:hover ~ .award__image,
+  .award__text:focus ~ .award__image {
+    opacity: 0;
+  }
+
+  .award[data-centred] .award__image {
+    opacity: 1;
   }
 }

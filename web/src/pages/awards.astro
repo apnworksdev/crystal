@@ -30,7 +30,8 @@ const awards = await getAwards();
               </li>
             ))}
           </ul>
-          {/* Second copy: the scroll loop wraps by one list height. Hidden under reduced motion. */}
+          {/* Copy for the loop. awards.js clones it above the list and, if the screen needs
+              it, below. Hidden under reduced motion. */}
           <ul class="awards" aria-hidden="true">
             {awards.map((award) => (
               <li class="award">

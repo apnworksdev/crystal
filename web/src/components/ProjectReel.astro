@@ -28,7 +28,6 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
       class="project-reel"
       data-reel
       aria-label="Work"
-      style={`--reel-steps: ${Math.max(cards.length - 1, 0)}`}
     >
       <div class="project-reel__stage">
         <p class="project-reel__brand" data-reel-brand>
@@ -42,7 +41,8 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
               data-reel-card
               data-brand={card.brand}
               data-title={card.title}
-              data-ratio={ratio(card.still) ? true : undefined}
+              data-slug={card.slug}
+              data-ratio={ratio(card.still)}
               style={ratio(card.still) ? `--ratio: ${ratio(card.still)}` : undefined}
               tabindex={index === 0 ? 0 : -1}
             >
@@ -51,7 +51,7 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
                   <img
                     src={card.still.src}
                     srcset={card.still.srcset}
-                    sizes="(min-width: 70rem) 40rem, 52vw"
+                    sizes="(min-width: 70rem) 46rem, (max-width: 48rem) 80vw, 52vw"
                     width={card.still.width}
                     height={card.still.height}
                     alt=""
@@ -65,7 +65,6 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
           {first.title}
         </h2>
       </div>
-      <div class="project-reel__run" aria-hidden="true" />
     </section>
   ) : (
     <p class="empty-message">No projects yet.</p>

@@ -9,6 +9,8 @@ import { closeNav } from './header.js';
 
 const VIEW_KEY = 'work-view';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+// The phone layout, as in the stylesheets.
+const phoneQuery = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)');
 let list;
 
 function stillImage() {
@@ -42,6 +44,7 @@ function rowsElement() {
 
 /** Repeats the visible rows above and below the real ones. Copies are skipped by screen readers and Tab. */
 function fillLoop({ keepPlace = false } = {}) {
+  endLight();
   const rowsEl = rowsElement();
   // Where the rows were within a set, to land on the same row after a rebuild.
   const place = keepPlace && period > 0 && rowsEl ? (((rowsEl.scrollTop - home) % period) + period) % period : 0;
@@ -49,8 +52,12 @@ function fillLoop({ keepPlace = false } = {}) {
   home = 0;
   if (!rowsEl) return;
   rowsEl.querySelectorAll('[data-work-copy]').forEach((copy) => copy.remove());
-  const items = originalRows().map((row) => row.parentElement);
-  if (!items.some((item) => !item.firstElementChild.hidden)) return;
+  // Only the rows the filter shows are repeated. A hidden row measures 0 from the top, so
+  // a set measured from it came out short and the copies drifted out of step.
+  const items = originalRows()
+    .filter((row) => !row.hidden)
+    .map((row) => row.parentElement);
+  if (!items.length) return;
   const makeSet = () => {
     const fragment = document.createDocumentFragment();
     items.forEach((item) => {
@@ -75,6 +82,53 @@ function fillLoop({ keepPlace = false } = {}) {
   rowsEl.prepend(above);
   home = period * sets;
   rowsEl.scrollTop = home + place;
+  currentRow?.removeAttribute('data-current');
+  currentRow = null;
+  followCurrentRow();
+}
+
+/* ---------- Phone: the current row ----------
+
+   There is no hover on a phone. The row on the line just under the still is the current
+   one: it is marked, and the still shows its picture. The rows snap to that line. */
+
+let currentRow = null;
+let currentFrame = 0;
+
+function markCurrent(row) {
+  if (row === currentRow) return;
+  currentRow?.removeAttribute('data-current');
+  currentRow = row;
+  row.setAttribute('data-current', '');
+  showStill(row.dataset.still);
+  warmNeighbours(row);
+}
+
+function followCurrentRow() {
+  currentFrame = 0;
+  // While rows are set aside (light), their places read 0: wait for them to come back.
+  if (!list?.isConnected || list.hidden || light || !phoneQuery.matches) return;
+  const rowsEl = rowsElement();
+  if (!rowsEl) return;
+  // The shown rows, top to bottom (hidden ones measure 0, so they are left out).
+  const shown = [...rowsEl.children].filter((item) => !item.hidden && item.firstElementChild?.hasAttribute('data-work-row'));
+  if (!shown.length) return;
+  const base = shown[0].offsetTop;
+  // The line, a few pixels into the first row under the still.
+  const line = rowsEl.scrollTop + 6;
+  let low = 0;
+  let high = shown.length - 1;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (shown[mid].offsetTop - base <= line) low = mid;
+    else high = mid - 1;
+  }
+  const row = shown[low].firstElementChild;
+  if (row?.hasAttribute('data-work-row')) markCurrent(row);
+}
+
+function followCurrentRowSoon() {
+  if (!currentFrame && phoneQuery.matches) currentFrame = requestAnimationFrame(followCurrentRow);
 }
 
 /** Back towards the real rows by whole sets, once the scroll has stopped. Nothing moves on screen. */
@@ -83,12 +137,18 @@ function recentre() {
   if (!rowsEl || period <= 0 || list.hidden) return;
   const away = rowsEl.scrollTop - home;
   const sets = away > 0 ? Math.floor(away / period) : Math.ceil(away / period);
-  if (sets) rowsEl.scrollTop -= sets * period;
+  if (!sets) return;
+  endLight();
+  rowsEl.scrollTop -= sets * period;
 }
 
 function onListScroll(event) {
   if (!list?.isConnected || list.hidden || document.body.dataset.workView !== 'list') return;
   if (event.target !== rowsElement()) return;
+  // Scrolling while the far rows are set aside would run into the gap they left. Setting
+  // them aside sends a scroll event of its own, at the same place: that one is ignored.
+  if (light && Math.abs(event.target.scrollTop - light.top) >= 1) endLight();
+  followCurrentRowSoon();
   window.clearTimeout(loopTimer);
   loopTimer = window.setTimeout(recentre, LOOP_PAUSE_MS);
 }
@@ -116,6 +176,8 @@ function applyFilter(value) {
     const categories = (row.dataset.categories || '').split(' ').filter(Boolean);
     const show = !value || value === 'all' || categories.includes(value);
     row.hidden = !show;
+    // The list item too: an empty one still took a gap, so filtered rows were spaced unevenly.
+    row.parentElement.hidden = !show;
     if (!show) return;
     count += 1;
     const index = row.querySelector('[data-index]');
@@ -144,10 +206,104 @@ function syncInset() {
   // The + sits 1px from the Index bar. Ceil would round the edge and the gap
   // together, so a fractional header edge opens a gap of anywhere from 1px to 2px.
   const right = header.getBoundingClientRect().right;
-  // Runs every frame while the menu moves. Writing the same value still restyles the page.
+  // Runs every frame while the menu moves. Writing the same value still restyles the list.
+  // Set on the list itself: on the root it restyled the whole page every frame.
   const inset = `${right + 1}px`;
-  const root = document.documentElement.style;
-  if (root.getPropertyValue('--work-list-inset') !== inset) root.setProperty('--work-list-inset', inset);
+  const style = list?.style;
+  if (style && style.getPropertyValue('--work-list-inset') !== inset) style.setProperty('--work-list-inset', inset);
+}
+
+/* ---------- Light while the header moves ----------
+
+   The list repeats its rows thousands of pixels each way, and moving it sideways makes the
+   browser lay out every one of them again, every frame. Safari could not keep up, so the
+   menu seemed to open with no motion. While the header moves, only the rows on or near the
+   screen stay in the layout; the rest are set aside and an empty spacer row takes their
+   exact place, so nothing on screen moves. Setting them aside takes one long frame, so it is done when a
+   finger or the pointer goes down on the header, before anything moves. They stay aside
+   while the menu is open and come back once it has closed, or on any scroll. */
+
+let light = null;
+// Rows kept either side of the screen while light, in screens.
+const LIGHT_MARGIN = 0.5;
+// Set aside on a press that never became a click: put back after this long.
+const LIGHT_IDLE_MS = 1500;
+
+function menuOpen() {
+  const header = document.querySelector('.site-header');
+  return Boolean(header?.hasAttribute('data-open') && !header.hasAttribute('data-closing'));
+}
+
+/** Puts the rows back unless the header is moving or the menu is open. */
+function settleLight() {
+  if (!light || followFrame || menuOpen()) return;
+  endLight();
+}
+
+function lighten() {
+  if (light || !list?.isConnected || list.hidden || document.body.dataset.workView !== 'list') return;
+  const rowsEl = rowsElement();
+  const items = rowsEl ? [...rowsEl.children] : [];
+  if (items.length < 60) return;
+  const padTop = parseFloat(getComputedStyle(rowsEl).paddingTop) || 0;
+  const gap = parseFloat(getComputedStyle(rowsEl).rowGap) || 0;
+  const base = items[0].offsetTop;
+  const view = rowsEl.clientHeight;
+  const top = rowsEl.scrollTop;
+  const from = top - view * LIGHT_MARGIN;
+  const to = top + view * (1 + LIGHT_MARGIN);
+  // Where each row sits in the scroll, from the top of the padding.
+  const place = (item) => padTop + item.offsetTop - base;
+  const first = items.findIndex((item) => place(item) + item.offsetHeight >= from);
+  if (first < 0) return;
+  let last = first;
+  while (last + 1 < items.length && place(items[last + 1]) <= to) last += 1;
+  const end = items[items.length - 1];
+  const above = items[first].offsetTop - base;
+  const below = end.offsetTop + end.offsetHeight - (items[last].offsetTop + items[last].offsetHeight);
+  if (above < 1 && below < 1) return;
+  // One empty row of the same height stands in for each run of rows set aside. (Padding on
+  // the list instead made Chrome lose the scroll position.) The gap between rows is part of
+  // what they took up, and the spacer brings one gap of its own.
+  const spacer = (height) => {
+    const item = document.createElement('li');
+    item.setAttribute('aria-hidden', 'true');
+    item.setAttribute('data-work-spacer', '');
+    item.style.height = `${Math.max(0, height)}px`;
+    return item;
+  };
+  const spacers = [];
+  // Scroll anchoring would follow a row that is set aside and move the list.
+  rowsEl.style.overflowAnchor = 'none';
+  const aside = items.filter((item, index) => index < first || index > last);
+  aside.forEach((item) => {
+    item.style.display = 'none';
+  });
+  if (above >= 1) {
+    spacers.push(spacer(above - gap));
+    items[first].before(spacers[spacers.length - 1]);
+  }
+  if (below >= 1) {
+    spacers.push(spacer(below - gap));
+    items[last].after(spacers[spacers.length - 1]);
+  }
+  if (Math.abs(rowsEl.scrollTop - top) >= 1) rowsEl.scrollTop = top;
+  light = { rowsEl, aside, spacers, top, timer: window.setTimeout(settleLight, LIGHT_IDLE_MS) };
+}
+
+function endLight() {
+  if (!light) return;
+  const { rowsEl, aside, spacers, timer } = light;
+  light = null;
+  window.clearTimeout(timer);
+  const now = rowsEl.scrollTop;
+  spacers.forEach((item) => item.remove());
+  aside.forEach((item) => {
+    item.style.display = '';
+  });
+  // The spacers stood in for the rows exactly, so the place is kept as it is now.
+  if (rowsEl.isConnected && Math.abs(rowsEl.scrollTop - now) >= 1) rowsEl.scrollTop = now;
+  rowsEl.style.overflowAnchor = '';
 }
 
 // The list starts 1px right of the header. While the menu grows or folds, the list moves
@@ -155,13 +311,17 @@ function syncInset() {
 let followFrame = 0;
 let followUntil = 0;
 
-function followHeader() {
+/** `moving`: the header is about to move (crystal:menu-motion), so the list goes light. */
+function followHeader(moving = false) {
   if (document.body.dataset.workView !== 'list') return;
+  if (moving === true) lighten();
   followUntil = performance.now() + 1200;
   if (followFrame) return;
   const tick = (now) => {
     syncInset();
-    followFrame = now < followUntil && document.body.dataset.workView === 'list' ? requestAnimationFrame(tick) : 0;
+    const going = now < followUntil && document.body.dataset.workView === 'list';
+    followFrame = going ? requestAnimationFrame(tick) : 0;
+    if (!going) settleLight();
   };
   followFrame = requestAnimationFrame(tick);
 }
@@ -233,6 +393,7 @@ function setView(view) {
   if (!list || !reel) return;
 
   const isList = view === 'list';
+  endLight();
   // Close while the current view's menu layout is still in effect.
   if (isList || document.body.dataset.workView === 'list') closeNav();
   list.hidden = !isList;
@@ -294,10 +455,13 @@ function switchView(view) {
 
 export function setUpWork() {
   switching = null;
+  currentRow = null;
+  cancelAnimationFrame(currentFrame);
+  currentFrame = 0;
+  endLight();
   list = document.querySelector('[data-work-list]');
   if (!list) {
     delete document.body.dataset.workView;
-    document.documentElement.style.removeProperty('--work-list-inset');
     return;
   }
 
@@ -376,7 +540,7 @@ function warmNeighbours(row) {
 }
 
 document.addEventListener('pointerover', (event) => {
-  if (!list?.isConnected || list.hidden) return;
+  if (!list?.isConnected || list.hidden || phoneQuery.matches) return;
   const row = event.target.closest?.('[data-work-row]');
   if (!row || row.hidden || !list.contains(row)) return;
   showStill(row.dataset.still);
@@ -417,4 +581,9 @@ document.addEventListener('transitionend', (event) => {
   if (event.target === list?.querySelector('[data-filters-panel]')) finishFiltersClose();
 });
 
-document.addEventListener('crystal:menu-motion', followHeader);
+document.addEventListener('crystal:menu-motion', () => followHeader(true));
+// A press on the header usually opens or closes something there: get light before it moves.
+document.addEventListener('pointerdown', (event) => {
+  if (!list?.isConnected || !(event.target instanceof Element)) return;
+  if (event.target.closest('.site-header')) lighten();
+}, { passive: true });

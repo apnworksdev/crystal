@@ -1,12 +1,13 @@
 ---
 import { stegaClean } from '@sanity/client/stega';
+import FooterLinks from './FooterLinks.astro';
 import Media from './Media.astro';
 import { richTextToHtml } from '../lib/format.js';
 import '../styles/components/about.css';
 
 // News lives in the header as one panel (NewsPanel). About only needs to know whether
 // a News tab exists on phone; desktop shows that same panel beside these windows.
-const { about, email, news = [] } = Astro.props;
+const { about, email, links = [], news = [] } = Astro.props;
 const html = richTextToHtml(about?.content);
 const address = stegaClean(email ?? '');
 const team = about?.team ?? [];
@@ -58,6 +59,10 @@ const hasNews = news.length > 0;
         <textarea id="about-message" name="message" rows="6"></textarea>
         <button class="about-panel__send" type="submit">Send</button>
       </form>
+      {/* Phone only (about.css): the footer lives here, under the contact form. */}
+      <div class="about-panel__footer">
+        <FooterLinks email={email} links={links} idPrefix="about-footer" />
+      </div>
     </div>
   </div>
   {

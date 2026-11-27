@@ -229,6 +229,11 @@
   scrollbar-width: none;
 }
 
+/* Desktop has the page footer; on phone this copy shows under the contact form. */
+.about-panel__footer {
+  display: none;
+}
+
 .about-panel__text p + p {
   margin-top: 1em;
 }
@@ -400,6 +405,30 @@ main,
     order: 0;
   }
 
+  /* Behaviour: where the header is docked at the bottom (Home, the Work stack, Merch,
+     product) or the top (the Work list), c and x stay on that edge and the panel unfolds
+     away from it, instead of the header jumping to the middle. Same page lists as header.css.
+     At the bottom it is held by its bottom edge: with top: var(--margin), the docked header's
+     top transition ran from there on closing, so it flew up and slid back down. top: auto
+     can't be animated, so closing leaves it in place. */
+  body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-about] {
+    top: auto;
+    bottom: var(--margin);
+    align-items: flex-end;
+  }
+
+  body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-about] .about-panel:not([hidden]) {
+    clip-path: inset(calc((1 - var(--about)) * (100% - var(--height-bubble))) 0 0 0);
+  }
+
+  body[data-work-view='list']:has([data-work-list]) .site-header[data-about] {
+    align-items: flex-start;
+  }
+
+  body[data-work-view='list']:has([data-work-list]) .site-header[data-about] .about-panel:not([hidden]) {
+    clip-path: inset(0 0 calc((1 - var(--about)) * (100% - var(--height-bubble))) 0);
+  }
+
   .site-header[data-about] .about-panel:not([hidden]) {
     flex-direction: column;
     align-items: flex-start;
@@ -507,6 +536,40 @@ main,
   .about-panel__contact {
     flex: 0 0 calc(50% - var(--gap));
     margin-top: auto;
+  }
+
+  /* The footer sits under the contact form, so the whole body scrolls instead of the text
+     alone. */
+  .about-panel__body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+
+  .about-panel__text {
+    flex-shrink: 0;
+    overflow: visible;
+  }
+
+  .about-panel__footer {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: var(--big-gap);
+  }
+
+  .about-panel__footer :is(.site-footer__link, .site-footer__label) {
+    align-self: flex-start;
+  }
+
+  .about-panel__footer .site-footer__form {
+    width: 100%;
+  }
+
+  /* Autofill paints the page background behind the text: keep the panel's red. */
+  .about-panel__footer .site-footer__form input:is(:autofill, :-webkit-autofill) {
+    box-shadow: inset 0 0 0 100vmax var(--foreground-color);
   }
 
   .about-panel__team {

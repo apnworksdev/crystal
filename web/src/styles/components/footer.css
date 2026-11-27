@@ -1,6 +1,6 @@
-/* The footer scrolls with the page and stops with its top against the nav.
-   The nav is fixed at the vertical center, so the footer block fills the
-   lower half of the viewport. */
+/* Desktop: the footer is fixed to the bottom of the screen on every page and comes up
+   with the menu (see the block below). Phone: it sits at the end of pages that scroll, and
+   waits below the screen on the locked ones. */
 
 .site-footer {
   position: relative;
@@ -20,24 +20,55 @@
 
 .site-footer__form {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   gap: var(--inline-gap);
   width: min(22rem, calc(100vw - var(--margin) * 2));
+  border-bottom: 1px solid currentColor;
 }
 
+/* One line: the email on the left, Submit on the right, one underline under both. */
 .site-footer__form input {
-  field-sizing: content;
-  width: auto;
-  max-width: 14rem;
+  flex: 1 1 auto;
+  min-width: 0;
   background: transparent;
   color: inherit;
 }
 
-.site-footer__rule {
-  flex: 1 1 auto;
-  min-width: 2rem;
-  margin-bottom: 0.2em;
-  border-bottom: 1px solid currentColor;
+.site-footer__form input::placeholder {
+  color: inherit;
+  opacity: 1;
+}
+
+.site-footer__form button {
+  flex: none;
+}
+
+/* The red box: globals.css rings every :focus-visible element in the foreground red, and a
+   text field is :focus-visible the whole time it is typed in (Submit too after a key or a
+   tap on touch). The underline already marks the field, and Submit underlines instead. */
+.site-footer__form :is(input, button):focus-visible {
+  outline: none;
+}
+
+.site-footer__form button:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* Autofill paints its own box behind the text. Keep the footer's colours. */
+.site-footer__form input:is(:autofill, :-webkit-autofill) {
+  -webkit-text-fill-color: currentColor;
+  box-shadow: inset 0 0 0 100vmax var(--background-color);
+}
+
+/* Links and Submit underline on hover. Added by Claude: restyle freely. */
+@media (hover: hover) {
+  .site-footer__link:is(:hover, :focus-visible),
+  .site-footer__form button:is(:hover, :focus-visible) {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    outline: none;
+  }
 }
 
 /* Product page: price and Buy hang below the nav, so the footer stops below them. */
@@ -51,10 +82,8 @@ body[data-page='product'] .site-footer {
   }
 }
 
-/* Home, Work, Merch and Awards lock the page so the footer is not
-   reachable by scroll. (Archive's footer follows its list: archive.css.) It waits just below; opening the menu lifts only the
-   footer until its top meets the header; the page content stays put.
-   footer-reveal.js measures --footer-rise from the header. */
+/* Home, Work, Merch and Awards lock the page so the footer is not reachable by scroll.
+   It waits just below the screen. (Desktop overrides this for every page below.) */
 body:is(
   :has([data-roulette]),
   :has([data-merch-reel]),
@@ -71,18 +100,6 @@ body:is(
     translate var(--grow-duration) var(--ease-out),
     visibility 0s linear var(--grow-duration),
     filter var(--transition-duration) linear;
-}
-
-body[data-footer-raised]:is(
-  :has([data-roulette]),
-  :has([data-merch-reel]),
-  :has([data-reel]),
-  :has([data-awards-scroller]),
-  [data-page='awards']
-) .site-footer {
-  translate: 0 calc(-1 * var(--footer-rise, 50dvh));
-  visibility: visible;
-  transition-delay: 0s;
 }
 
 /* Phone: the footer pushes the docked header up to the middle in the same movement.
@@ -105,7 +122,38 @@ body[data-footer-raised]:is(
   }
 }
 
+/* Desktop, every page: fixed to the bottom of the screen, never at the end of a scroll (the
+   archive's list included). It waits just below the screen and rises by its own height
+   while the menu is open (footer-reveal.js sets data-footer-raised); the page stays put.
+   The query is the phone query negated, as in header.css: change them together. */
+@media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
+  html body:not([data-page='project']) .site-footer {
+    position: fixed;
+    z-index: 2;
+    top: 100dvh;
+    left: 0;
+    right: auto;
+    min-height: 0;
+    margin-left: var(--margin);
+    padding-top: 0;
+    padding-bottom: var(--margin);
+    scroll-snap-align: none;
+    visibility: hidden;
+    transition:
+      translate var(--grow-duration) var(--ease-out),
+      visibility 0s linear var(--grow-duration),
+      filter var(--transition-duration) linear;
+  }
+
+  html body[data-footer-raised]:not([data-page='project']) .site-footer {
+    translate: 0 -100%;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  html body:not([data-page='project']) .site-footer,
   body:is(
     :has([data-roulette]),
     :has([data-merch-reel]),

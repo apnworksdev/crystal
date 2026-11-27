@@ -1,6 +1,6 @@
 ---
 import { stegaClean } from '@sanity/client/stega';
-import { cardStackStyle, depthOf } from '../lib/card-stack.js';
+import { cardStackStyle, depthOf, openPileStyle } from '../lib/card-stack.js';
 import '../styles/components/product-strip.css';
 
 const { product, products = [] } = Astro.props;
@@ -13,9 +13,9 @@ const ratio = (image) => (image?.width > 0 && image?.height > 0 ? (image.width /
 // The merch pile, still behind the pictures: this product would be in front, the others in
 // their places behind it, blurred further and nearly gone (as in the reference). Placed
 // here once, from the same stack as the merch page (lib/card-stack.js). The front card is
-// left out: the pictures take its place.
-const PILE_FADE = 0.052;
-const PILE_BLUR = 20;
+// left out: the pictures take its place. Each ghost also keeps its place in the open pile
+// (data-blur, data-opacity), so product-strip.js can melt it away when the product opens
+// from Merch, and bring it back on the way out.
 const slugOf = (item) => stegaClean(item.slug);
 const at = products.findIndex((item) => slugOf(item) === slugOf(product));
 const pile = at < 0
@@ -29,12 +29,13 @@ const pile = at < 0
       .filter(({ depth, style, image }) => depth > 0 && style.opacity > 0.01 && image)
       .map(({ item, style, image }) => ({
         image,
+        base: style,
         style: [
           `--size: ${item.size ?? 1}`,
           ratio(image) ? `--ratio: ${ratio(image)}` : '',
           `transform: translate(-50%, -50%) translateY(${style.y.toFixed(2)}px)`,
-          `filter: blur(${(style.blur + PILE_BLUR).toFixed(1)}px)`,
-          `opacity: ${(style.opacity * PILE_FADE).toFixed(3)}`,
+          `filter: blur(${openPileStyle(style, 1).blur.toFixed(1)}px)`,
+          `opacity: ${openPileStyle(style, 1).opacity.toFixed(3)}`,
           `z-index: ${style.z}`,
         ]
           .filter(Boolean)
@@ -48,14 +49,21 @@ const pile = at < 0
       class="product-strip"
       data-product-strip
       aria-label={title}
-      style={`--reel-steps: ${Math.max(images.length - 1, 0)}; --strip-count: ${images.length}; --size: ${product.size ?? 1}`}
+      style={`--size: ${product.size ?? 1}`}
     >
       <div class="product-strip__stage">
         {
           pile.length > 0 && (
             <div class="product-strip__pile" aria-hidden="true">
-              {pile.map(({ image, style }) => (
-                <div class="product-strip__ghost" data-ratio={ratio(image) ? true : undefined} style={style}>
+              {pile.map(({ image, base, style }) => (
+                <div
+                  class="product-strip__ghost"
+                  data-ghost
+                  data-blur={base.blur.toFixed(2)}
+                  data-opacity={base.opacity.toFixed(3)}
+                  data-ratio={ratio(image) ? true : undefined}
+                  style={style}
+                >
                   <img src={image.src} srcset={image.srcset} sizes="(max-width: 48rem) 100vw, (min-width: 81.25rem) 52rem, 64vw" width={image.width} height={image.height} alt="" loading="lazy" decoding="async" />
                 </div>
               ))}
@@ -87,7 +95,6 @@ const pile = at < 0
           )}
         </div>
       </div>
-      <div class="product-strip__run" aria-hidden="true" />
     </section>
   ) : (
     <p class="empty-message">No pictures yet.</p>

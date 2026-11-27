@@ -93,12 +93,15 @@ html.intro-play.intro-page .site-footer {
     width: 76vw;
   }
 
+  /* Behaviour: the collapse eases in and out over the grow duration, like the flight
+     before it, instead of a quick linear cut. The bubble and the clip share one curve, so
+     the letters always end at the bubble's edge. intro.js waits for --grow-duration. */
   html.intro-play .site-header__logo,
   html.intro-play .site-header__logo svg {
     transition:
-      width var(--transition-duration) linear,
-      margin-left var(--transition-duration) linear,
-      clip-path var(--transition-duration) linear;
+      width var(--grow-duration) cubic-bezier(0.65, 0, 0.35, 1),
+      margin-left var(--grow-duration) cubic-bezier(0.65, 0, 0.35, 1),
+      clip-path var(--grow-duration) cubic-bezier(0.65, 0, 0.35, 1);
   }
 
   html.intro-play:not(.intro-collapse) .site-header__logo {

@@ -1,5 +1,6 @@
 // The project page is a player. The site header slides down and becomes its bar.
 
+import { prefetch } from 'astro:prefetch';
 import { navigate } from 'astro:transitions/client';
 import { leaveCoverShrink, markLeave, takeEnterCover } from './cover.js';
 import { closeNav } from './header.js';
@@ -158,11 +159,6 @@ function slideHeader() {
 const HEADER_HOME_KEY = 'crystal-header-home';
 const SLIDE_EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
-function pageMargin() {
-  const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--margin'));
-  return Number.isFinite(value) ? value : 20;
-}
-
 /** Where the header sits before a project opens. Used to slide it back on a full page load. */
 export function rememberHeaderHome() {
   const logo = document.querySelector('.site-header__logo');
@@ -191,8 +187,8 @@ export function slideHeaderDown() {
   const logo = header?.querySelector('.site-header__logo');
   if (!header || !logo || reducedMotion.matches) return Promise.resolve();
   const from = logo.getBoundingClientRect();
-  const margin = pageMargin();
-  const dy = window.innerHeight - margin - from.height - from.top;
+  // The player bar sits on the bottom edge, with no margin below it (project.css).
+  const dy = window.innerHeight - from.height - from.top;
   hideHeaderExtras(header);
   header.classList.add('is-arriving');
   header.style.transformOrigin = 'left center';
@@ -276,17 +272,42 @@ function setPlayingMarks(playing) {
   if (shownPlaying === playing) return;
   shownPlaying = playing;
   document.querySelector('[data-project-vimeo]')?.toggleAttribute('data-playing', playing);
+  // The icons are SVG, which has no hidden property: set the attribute itself.
   document.querySelectorAll('[data-icon="play"]').forEach((icon) => {
-    icon.hidden = playing;
+    icon.toggleAttribute('hidden', playing);
   });
   document.querySelectorAll('[data-icon="pause"]').forEach((icon) => {
-    icon.hidden = !playing;
+    icon.toggleAttribute('hidden', !playing);
   });
   startLogoMotion();
 }
 
+/** The shared opening motion from variables.css, read once per opening. */
+function sharedMotion() {
+  const style = getComputedStyle(document.documentElement);
+  const ms = (name, fallback) => {
+    const raw = style.getPropertyValue(name).trim();
+    const value = parseFloat(raw);
+    if (!Number.isFinite(value)) return fallback;
+    return raw.endsWith('ms') ? value : value * 1000;
+  };
+  return {
+    ease: style.getPropertyValue('--ease-out').trim() || 'cubic-bezier(0.19, 1, 0.22, 1)',
+    grow: ms('--grow-duration', 500),
+    fade: ms('--fade-duration', 300),
+    textDelay: ms('--text-delay', 180),
+  };
+}
+
+function cancelInfoMotion(player) {
+  player
+    ?.querySelectorAll('[data-player-name], [data-player-info] > *, [data-player-info-close], .site-header__slot')
+    .forEach((node) => node.getAnimations?.().forEach((animation) => animation.cancel()));
+}
+
 function clearPlayerChrome(player) {
   if (!player) return;
+  cancelInfoMotion(player);
   const name = player.querySelector('[data-player-name]');
   const infoHost = player.querySelector('[data-player-info]');
   const infoClose = player.querySelector('[data-player-info-close]');
@@ -317,6 +338,11 @@ export function setUpProject() {
   }
 
   arrival = from;
+  // Fetch the page that closing goes back to now, so closing does not wait on the network
+  // with the player already gone. Prefetch on hover never happens on a phone.
+  if (document.querySelector('[name="astro-view-transitions-enabled"]')) {
+    prefetch(arrival && arrival !== location.pathname ? arrival : '/work', { ignoreSlowConnection: true });
+  }
   shownPlaying = null;
   closeNav();
 
@@ -399,12 +425,105 @@ export function setUpProject() {
     }, MOVE_MS);
   }
 
-  const setInfoOpen = (open) => {
-    if (!hasInfo || !nameButton || !name) return;
+  const slot = player?.querySelector('.site-header__slot');
+  let infoOpen = false;
+  let infoTurn = 0;
+
+  // Where the title block and the slot after it sit, open or closed, relative to the bar.
+  const measureInfo = (open) => {
     name.toggleAttribute('data-open', open);
+    const base = player.getBoundingClientRect();
+    const box = name.getBoundingClientRect();
+    return {
+      left: box.left - base.left,
+      width: box.width,
+      height: box.height,
+      slot: slot ? parseFloat(getComputedStyle(slot).marginLeft) || 0 : 0,
+      slotLeft: slot ? slot.getBoundingClientRect().left - base.left : 0,
+    };
+  };
+
+  // The description grows up out of the title block and shrinks back into it, on the shared
+  // expo-out. Its text fades in once the block has started to grow.
+  const setInfoOpen = (open) => {
+    if (!hasInfo || !nameButton || !name || !player) return;
+    if (open === infoOpen) return;
+    infoOpen = open;
+    const turn = ++infoTurn;
     nameButton.setAttribute('aria-expanded', String(open));
+
+    const animate = !reducedMotion.matches && name.isConnected;
+    // Start from wherever the block is now, even halfway through the other direction.
+    const now = animate ? name.getBoundingClientRect() : null;
+    const base = animate ? player.getBoundingClientRect() : null;
+    const slotNow = animate && slot ? slot.getBoundingClientRect().left - base.left : 0;
+    cancelInfoMotion(player);
+
+    if (!animate) {
+      name.toggleAttribute('data-open', open);
+      if (infoHost) infoHost.hidden = !open;
+      if (infoClose) infoClose.hidden = !open;
+      return;
+    }
+
+    const motion = sharedMotion();
+    const from = { left: now.left - base.left, width: now.width, height: now.height };
+    // Measured as it will rest: closed, the details are hidden and do not widen the title.
     if (infoHost) infoHost.hidden = !open;
     if (infoClose) infoClose.hidden = !open;
+    const target = measureInfo(open);
+    if (infoHost) infoHost.hidden = false;
+    if (infoClose) infoClose.hidden = false;
+    // Held open while it shrinks, so it stays out of the row until it is back to its size.
+    name.setAttribute('data-open', '');
+    // In the open layout the slot is the first control in the row, so its margin is its offset.
+    const slotTo = open ? target.slot : target.slotLeft;
+
+    const timing = { duration: motion.grow, easing: motion.ease };
+    const grow = name.animate(
+      [
+        { left: `${from.left}px`, width: `${from.width}px`, height: `${from.height}px` },
+        { left: `${target.left}px`, width: `${target.width}px`, height: `${target.height}px` },
+      ],
+      timing,
+    );
+    slot?.animate([{ marginLeft: `${slotNow}px` }, { marginLeft: `${slotTo}px` }], timing);
+
+    // The details' contents fade, not the details block: it carries the background now
+    // (header.css), which has to grow with the name.
+    const text = [...(infoHost?.children ?? []), infoClose].filter(Boolean);
+    text.forEach((node) => {
+      node.animate(
+        open ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }],
+        {
+          duration: motion.fade,
+          delay: open ? motion.textDelay : 0,
+          easing: 'ease',
+          fill: 'both',
+        },
+      );
+    });
+
+    if (open) {
+      grow.finished
+        .then(() => {
+          if (turn !== infoTurn) return;
+          text.forEach((node) => node.getAnimations().forEach((animation) => animation.cancel()));
+        })
+        .catch(() => {});
+      return;
+    }
+
+    const settle = () => {
+      if (turn !== infoTurn || signal.aborted) return;
+      cancelInfoMotion(player);
+      name.removeAttribute('data-open');
+      if (infoHost) infoHost.hidden = true;
+      if (infoClose) infoClose.hidden = true;
+    };
+    // A background tab may never run the animation. The block must still close.
+    grow.finished.then(settle).catch(() => {});
+    window.setTimeout(settle, motion.grow + 80);
   };
 
   const wake = () => {

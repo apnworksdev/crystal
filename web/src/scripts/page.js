@@ -1,7 +1,7 @@
 // Runs on the first load and again after each page transition.
 
 import { setUpArchive } from './archive.js';
-import { dismissAbout, leaveAbout, prepareSectionLeave, setUpHeader } from './header.js';
+import { dismissAbout, leaveAbout, prepareSectionLeave, rememberHeaderRow, setUpHeader } from './header.js';
 import { startIntro, whenIntroDone } from './intro.js';
 import { setUpNews } from './news.js';
 import { setUpHeaderScroll } from './header-scroll.js';
@@ -25,6 +25,7 @@ import {
   slideHeaderDown,
 } from './project.js';
 import { leaveProduct, setUpProduct } from './product.js';
+import { handoffLeave } from './handoff.js';
 import { primeLogoAudio } from './logo-motion.js';
 import './mirror-trigger.js';
 
@@ -112,6 +113,9 @@ function content() {
 
 function fadeContentOut() {
   if (contentOut) return contentOut;
+  // Merch and a product hand over to each other with their own motion (handoff.js).
+  const own = handoffLeave();
+  if (own) return (contentOut = own);
   const element = content();
   if (!element || reducedMotion.matches) return Promise.resolve();
   const animation = element.animate([{ opacity: 1 }, { opacity: 0 }], {
@@ -274,7 +278,7 @@ document.addEventListener('astro:before-preparation', (event) => {
   const cover = enterPending() || leavePending() || coverBusy();
   const clicked = headerLeft;
   headerLeft = false;
-  fadeIn = !cover && !reducedMotion.matches;
+  fadeIn = !cover && !reducedMotion.matches && !handoffLeave();
   if (cover) return;
   const load = event.loader;
   // Back and forward skip the click handler, so the header plays its leave motion here.
@@ -290,6 +294,7 @@ document.addEventListener('astro:before-swap', () => {
   contentOut = null;
   clearPlayerFade();
   rememberHeaderBox();
+  rememberHeaderRow();
   // The header is persisted, so is-arriving has to be on it before the project styles land.
   try {
     if (sessionStorage.getItem('crystal-cover-enter') === '1') {
@@ -302,3 +307,25 @@ document.addEventListener('astro:before-swap', () => {
 
 setUpPage();
 document.addEventListener('astro:after-swap', setUpPage);
+
+// A page restored from the back/forward cache (Safari keeps one for every page) comes back
+// exactly as it was left: under a full-screen cover, faded out, or with the header mid-move.
+// Clear all of that so it never reopens blank.
+addEventListener('pageshow', (event) => {
+  if (!event.persisted) return;
+  document.querySelectorAll('.project-cover').forEach((layer) => layer.remove());
+  const element = content();
+  element?.getAnimations().forEach((animation) => animation.cancel());
+  if (element) element.style.opacity = '';
+  contentOut = null;
+  fadeIn = false;
+  const header = document.querySelector('.site-header');
+  header?.classList.remove('is-leaving', 'is-arriving');
+  header?.getAnimations().forEach((animation) => animation.cancel());
+  clearPlayerFade();
+  try {
+    ['crystal-cover-enter', 'crystal-cover-leave', 'crystal-cover-origin'].forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    // Nothing held over, then.
+  }
+});

@@ -68,9 +68,13 @@
   cursor: none;
 }
 
+/* Drawn at twice the size with a 1px stroke, then scaled to half: a 0.5px line on every
+   browser (a 0.5 stroke-width is rounded up to 1px by some). Shows at 10px. */
 .project__cursor svg {
-  width: 10px;
-  height: 10px;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  scale: 0.5;
 }
 
 .project__cursor {
@@ -93,4 +97,56 @@
 .project__cursor[hidden],
 body[data-player-idle] .project__cursor {
   display: none;
+}
+
+/* Only the icon for the current state shows. globals.css makes every svg a block,
+   which beat the hidden attribute and showed play and pause together. */
+.project__cursor svg[hidden] {
+  display: none;
+}
+
+/* The player bar, on top of the header rules in header.css (the extra :root wins over them
+   whatever order the stylesheets load in). It sits on the bottom edge with no margin below.
+   On an iPhone the home-indicator inset is padding inside the bubbles, so their colour still
+   reaches the edge. */
+body[data-page='project'] {
+  --player-safe: env(safe-area-inset-bottom, 0px);
+}
+
+:root body[data-page='project'] .site-header {
+  bottom: 0;
+  height: calc(var(--height-bubble) + var(--player-safe));
+}
+
+:root body[data-page='project'] .site-header__player {
+  height: calc(var(--height-bubble) + var(--player-safe));
+}
+
+:root body[data-page='project'] :is(
+  .site-header__logo,
+  .site-header__name,
+  .site-header__slot,
+  .site-header__seek,
+  .site-header__time,
+  .site-header__close
+) {
+  height: calc(var(--height-bubble) + var(--player-safe));
+  padding-bottom: var(--player-safe);
+}
+
+/* The open description keeps the page margin above it, now that the bar has none below. */
+:root body[data-page='project'] .site-header__name[data-open] {
+  height: calc(100dvh - var(--margin));
+  /* Open, the name has no background of its own (header.css): the home-indicator inset
+     goes inside the details block, so its colour still reaches the edge. */
+  padding-bottom: 0;
+}
+
+:root body[data-page='project'] .site-header__name[data-open] .site-header__info {
+  padding-bottom: calc(var(--gap) + var(--player-safe));
+}
+
+/* The open description keeps the same gap to the controls as the closed title. */
+:root body[data-page='project'] .site-header__name[data-open] ~ .site-header__slot {
+  margin-left: calc(var(--player-info-width) + var(--small-gap));
 }

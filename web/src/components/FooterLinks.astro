@@ -1,0 +1,30 @@
+---
+// The footer's contents: legal links, the newsletter line and the social links. Used by the
+// page footer (Base.astro) and, on phone, at the end of the About panel. `idPrefix` keeps
+// the email field's id unique when both are on the page.
+import { stegaClean } from '@sanity/client/stega';
+
+const { email, links = [], idPrefix = 'footer' } = Astro.props;
+const address = stegaClean(email ?? '');
+const fieldId = `${idPrefix}-email`;
+---
+
+<a class="site-footer__link" href="/privacy">Privacy Policy</a>
+<a class="site-footer__link" href="/cookies">Cookies Policy</a>
+<p class="site-footer__label">Contact</p>
+{
+  address && (
+    <form class="site-footer__form" action={`mailto:${address}`}>
+      <label class="sr-only" for={fieldId}>Email</label>
+      <input id={fieldId} type="email" name="email" placeholder={address} autocomplete="email" />
+      <button type="submit">Submit</button>
+    </form>
+  )
+}
+{
+  links.map((link) => (
+    <a class="site-footer__link" href={link.url} rel="me noopener">
+      {link.label}
+    </a>
+  ))
+}

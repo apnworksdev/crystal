@@ -137,7 +137,9 @@ async function sequence() {
   // On a phone the plate lands on the whole wordmark, which then shrinks to its c.
   if (phone.matches) {
     document.documentElement.classList.add('intro-collapse');
-    await wait(HEADER_MS);
+    // The collapse runs on --grow-duration (intro.css).
+    const grow = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--grow-duration')) * 1000;
+    await wait(Number.isFinite(grow) ? grow : 500);
   }
 
   // On a project the header is already the player, so the nav stays hidden.

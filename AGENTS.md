@@ -11,7 +11,7 @@ and hosting on Netlify. Read this before changing structure, names or styles.
 - **The site owner writes the CSS.** Don't add or restyle visual CSS unless asked. Behaviour-only CSS, such as
   view transitions, is fine, but say so when you add it.
 - **Keep the public site fast.** It's static, and loads nothing from preview mode. Every page ships about
-  18 KB of compressed JavaScript (the shared script plus Astro's router); the home carousel adds about 12 KB on the home page only.
+  22 KB of compressed JavaScript (the shared script plus Astro's router); the home carousel adds about 10 KB on the home page only.
   Check the size of `web/dist/_astro` after adding anything that runs in the browser.
 - **The user handles Git.** Don't commit or push unless asked.
 
@@ -33,7 +33,8 @@ into workspaces, because Netlify would then install the Studio's dependencies on
 ## `web/src`
 
 ```
-components/   reusable pieces (Media, ProjectRoulette, ProjectReel, ProjectList, NewsPanel, AboutPanel)
+components/   reusable pieces (Media, ProjectRoulette, ProjectReel, ProjectList, NewsPanel, AboutPanel, FooterLinks:
+              the footer's contents, shown in the page footer and, on phone, at the end of About)
 layouts/      page shell (Base.astro): head, header (with the news panel), footer, global styles
 lib/          data and helpers, no browser code
   content.js      every Sanity query and the shape of the data pages receive
@@ -41,11 +42,14 @@ lib/          data and helpers, no browser code
   video.js        turns Vimeo or MP4 links into embed data
   format.js       rich text to HTML, the category list
   pages.js        which projects get a page
-  card-stack.js   card positions for the Work stack and the merch pile
+  card-stack.js   card positions and easing for the merch stack and pile
+  work-stack.js   card positions for the Work stack
+  awards-loop.js  wrap maths and centred entry for the endless Awards roll
 pages/        one file per route
 preview/      code that only exists in preview mode (draft-mode route, session check, click-to-edit)
 scripts/      browser code (page.js: video autoplay, click-to-load Vimeo player; news.js: the news panel;
-              footer-reveal.js: Home's footer rising with the menu; box-resize.js: dragging the bottom
+              footer-reveal.js: the footer rising from the bottom of the screen with the desktop menu;
+              handoff.js: lets Merch hand its motion to a product page instead of the content fade; box-resize.js: dragging the bottom
               edge of the About, Team and News windows; scroll-end.js: scrollend with a fallback for
               Safari, used by every reel and strip that settles; header-scroll.js: moves the header
               sideways when it runs past the screen)
@@ -90,7 +94,7 @@ web/src/styles/
 - **Never** create an index file that imports every stylesheet. It would send all the CSS to every page.
 - **`globals.css` is shared across projects.** Put project-specific base styles in `main.css` instead.
 - **Phone layout** uses one query, `(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)`, at the end of each
-  stylesheet that needs it. `header.js` repeats it as `phone`. Change all of them together. Desktop menus open
+  stylesheet that needs it. `header.js` and `roulette.js` repeat it as `phone`, and `footer.css` and `header.css` negate it for desktop. Change all of them together. Desktop menus open
   sideways in the header row (including Work and Archive); the phone column menu is wrapped in that query in
   `header.css`.
 - **Opening motion** (menu, About, Home footer, stacks, page reveal) shares one curve: `--ease-out`,
@@ -129,8 +133,8 @@ web/src/styles/
 | `archive` | archive. A native snapping scroll; rows that pass the bar move above it (`archive.js`) | `__item`, `__index`, `__title`, `__brand`, `__year`, `__time`, `__snaps`, `__snap` (invisible snap points, one per row, that never move) |
 | `awards`, `award` | awards | `award__text`, `__ceremony`, `__category`, `__work`, `__image`, `__year` |
 | `merch-reel` | merch page | `__stage`, `__stack`, `__card`, `__run` |
-| `product-strip` | product page. A row on desktop, a column on phone; the merch pile stays behind, faded | `__stage`, `__pile`, `__ghost`, `__track`, `__card`, `__run` |
-| `about-panel`, `team`, `team-member` | About panel in the header. There is no /about route | `about-panel__head`, `__title`, `__tabs`, `__tab`, `__close`, `__text`, `__team-link`, `__contact`, `team__list`, `team-member__name`, `__image`, `__card`, `__position`, `__description`, `__track`, `__track-label` |
+| `product-strip` | product page. A row on desktop, a column on phone; the merch pile behind fades away as it opens | `__stage`, `__pile`, `__ghost`, `__track`, `__card`, `__run` |
+| `about-panel`, `team`, `team-member` | About panel in the header. There is no /about route | `about-panel__head`, `__title`, `__tabs`, `__tab`, `__close`, `__text`, `__team-link`, `__contact`, `__footer` (phone only), `team__list`, `team-member__name`, `__image`, `__card`, `__position`, `__description`, `__track`, `__track-label` |
 | `mirror` | Hidden /mirror page, opened by three quick clicks on the header logo. No header, footer or router | `__canvas`, `__video`, `__logo`, `__bar`, `__enter`, `__toggle`, `__slash`, `__close` |
 | `page-title`, `empty-message`, `rich-text` | Shared | none |
 

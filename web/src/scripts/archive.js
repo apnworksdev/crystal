@@ -5,12 +5,18 @@
 // Elsewhere two IntersectionObservers move each row up by the bar's height as it crosses,
 // and back down when it returns.
 //
+// The list is endless both ways, as the Work list is (work.js): copies of the rows sit
+// above and below the real ones, and the list opens on the real ones. Once a scroll has
+// stopped, it goes back towards the middle by whole sets of rows, which looks exactly the
+// same. The footer is not part of the list: it is fixed to the bottom of the screen
+// (footer.css, archive.css).
+//
 // The bar and the rows share one horizontal scroll. The bar eases open on arrival and
-// shut before a section change. Opening the menu runs the list to its end, where the
-// footer rests under the header; closing runs it back to the row it was on. While the
-// menu grows or folds, the list follows the bar frame by frame (followMenu). It reads the
-// bar's live size once a frame and never re-measures the open layout then, which switched
-// the bar's transition off and was the lag.
+// shut before a section change. While the menu grows or folds, the list follows the bar
+// frame by frame (followMenu). It reads the bar's live size once a frame and never
+// re-measures the open layout then, which switched the bar's transition off and was the lag.
+
+import { watchScrollEnd } from './scroll-end.js';
 
 let scrollEl = null;
 let headerEl = null;
@@ -25,9 +31,13 @@ let above = null;
 let watchedHeight = 0;
 /** True while the columns fold away with the menu (foldColumns). */
 let folding = false;
-/** Where the menu found the list, while the menu has run it to its end. */
-let menuReturn = null;
-let glide = null;
+let stopScrollEnd = null;
+// How far a scroll can run each way before it reaches the copies' end: more than a fast
+// fling on a phone covers, so a fling never hits the end.
+const LOOP_REACH = 9000;
+// The height of one set of rows, and the scroll position with the real rows under the bar.
+let period = 0;
+let home = 0;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 // Browsers that can tie an animation to the scroll move the rows in CSS, in the same frame.
 const scrollDriven = typeof CSS !== 'undefined' && CSS.supports('animation-timeline: view()');
@@ -85,6 +95,7 @@ function align() {
   const key = `${Math.round(inset)}|${Math.round(width)}|${Math.round(track)}`;
   if (key === lastAlign) return;
   lastAlign = key;
+  commitFollow();
   scroll.style.setProperty('--archive-inset', `${Math.round(inset)}px`);
   scroll.style.setProperty('--archive-columns-width', `${Math.round(width)}px`);
   scroll.style.setProperty('--archive-track', `${Math.round(track)}px`);
@@ -94,6 +105,8 @@ function align() {
 
 let followFrame = 0;
 let followUntil = 0;
+/** What followBar set directly while the bar moved, or null. */
+let followed = null;
 
 /** The bar as it is drawn this frame. Offsets ignore the sideways-scroll transform. */
 function followBar() {
@@ -111,31 +124,118 @@ function followBar() {
   const key = `${inset}|${width}|${track}`;
   if (key === lastAlign) return;
   lastAlign = key;
+  // A custom property on the scroller restyles every row and its cells, thousands of
+  // elements, each frame. While the bar moves, the list and main take the same lengths
+  // directly instead, which restyles only them (commitFollow puts the properties back).
+  const list = scroll.querySelector('.archive');
+  const main = list?.parentElement;
+  if (!list || !main) return;
+  followed = { scroll, list, main, inset, width, track };
+  list.style.marginLeft = `${inset}px`;
+  list.style.width = `${width}px`;
+  main.style.minWidth = `${track}px`;
+}
+
+/** Once the bar has settled: back to the stylesheet's custom properties, at the same lengths. */
+function commitFollow() {
+  if (!followed) return;
+  const { scroll, list, main, inset, width, track } = followed;
+  followed = null;
   scroll.style.setProperty('--archive-inset', `${inset}px`);
   scroll.style.setProperty('--archive-columns-width', `${width}px`);
   scroll.style.setProperty('--archive-track', `${track}px`);
+  list.style.marginLeft = '';
+  list.style.width = '';
+  main.style.minWidth = '';
 }
 
 /** The menu is opening or closing (header.js): the rows keep the bar's width as it moves. */
 function followMenu() {
   if (document.body.dataset.page !== 'archive' || !headerEl) return;
+  lighten();
   // Longer than the slowest menu motion, so the rows end where the bar ends.
   followUntil = performance.now() + 1200;
   if (followFrame) return;
   const tick = (now) => {
     followBar();
-    followFrame = now < followUntil && document.body.dataset.page === 'archive' ? requestAnimationFrame(tick) : 0;
+    const going = now < followUntil && document.body.dataset.page === 'archive';
+    followFrame = going ? requestAnimationFrame(tick) : 0;
+    if (going) return;
+    commitFollow();
+    settleLight();
   };
   followFrame = requestAnimationFrame(tick);
 }
 
 document.addEventListener('crystal:menu-motion', followMenu);
 
+/* ---------- Light while the header moves ----------
+
+   Every row, copies included, runs a scroll-driven animation (archive.css). While anything
+   else animates, such as the menu, the browser brings all of them up to date every frame,
+   and again on every getAnimations() call the header makes: about 7 ms each with 800 rows,
+   so the menu dropped every other frame. Nothing scrolls while the header moves, so rows
+   more than a screen away from the visible ones drop their animation until it has settled
+   (data-archive-far). They are off screen, so nothing visible changes. The first scroll,
+   or a resize, puts them back before anything is drawn. As on the Work list (work.js), this
+   is done when a finger or the pointer goes down on the header, before anything moves. */
+
+/** Rows set aside, or null. */
+let light = null;
+let lightTimer = 0;
+// Set aside on a press that never became a click: put back after this long.
+const LIGHT_IDLE_MS = 1500;
+
+function menuOpen() {
+  return Boolean(headerEl?.hasAttribute('data-open') && !headerEl.hasAttribute('data-closing'));
+}
+
+function lighten() {
+  if (light || !scrollDriven || !scrollEl || rows.length < 100) return;
+  const main = rows[0].offsetParent;
+  if (!main) return;
+  // Offsets ignore the rows' own moves, which change while they animate.
+  const top = main.getBoundingClientRect().top;
+  const view = scrollEl.clientHeight;
+  light = rows.filter((row) => {
+    const y = top + row.offsetTop;
+    return y + row.offsetHeight < -view || y > view * 2;
+  });
+  light.forEach((row) => row.setAttribute('data-archive-far', ''));
+  window.clearTimeout(lightTimer);
+  lightTimer = window.setTimeout(settleLight, LIGHT_IDLE_MS);
+}
+
+function endLight() {
+  window.clearTimeout(lightTimer);
+  if (!light) return;
+  light.forEach((row) => row.removeAttribute('data-archive-far'));
+  light = null;
+}
+
+/** Puts the rows back unless the header is moving or the menu is open. */
+function settleLight() {
+  if (!light || followFrame || menuOpen()) return;
+  endLight();
+}
+
+// A press on the header usually opens or closes something there: get light before it moves.
+document.addEventListener(
+  'pointerdown',
+  (event) => {
+    if (document.body.dataset.page !== 'archive' || !(event.target instanceof Element)) return;
+    if (event.target.closest('.site-header')) lighten();
+  },
+  { passive: true },
+);
+
 let lastShift = '';
 
 function onScroll() {
   if (!headerEl || !scrollEl) return;
-  // Vertical glides fire scroll too; only the sideways offset moves the bar.
+  // Any scroll brings the rows set aside back before it is drawn.
+  endLight();
+  // Vertical scrolls fire scroll too; only the sideways offset moves the bar.
   const shift = `${scrollEl.scrollLeft}px`;
   if (shift === lastShift) return;
   lastShift = shift;
@@ -206,86 +306,65 @@ function watchRows() {
   });
 }
 
-/* ---------- The menu runs the list to the footer ---------- */
+/* ---------- Endless list ---------- */
 
-const easeOut = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
-
-function stopGlide() {
-  if (!glide) return;
-  cancelAnimationFrame(glide.frame);
-  window.clearTimeout(glide.timer);
-  const el = glide.el;
-  glide = null;
-  // The rows that crossed the bar are updated a frame later. Snap again after that, so
-  // the snap sees them where they belong.
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      if (!glide) el.removeAttribute('data-archive-gliding');
-    }),
-  );
-}
-
-/** Scrolls to `to` on the shared curve. The snap waits until it lands. */
-function glideTo(to) {
-  stopGlide();
-  const el = scrollEl;
-  const from = el.scrollTop;
-  if (reducedMotion.matches || Math.abs(to - from) < 1) {
-    el.scrollTop = to;
-    return;
-  }
-  const duration = parseFloat(getComputedStyle(el).getPropertyValue('--grow-duration')) * 1000 || 500;
-  el.setAttribute('data-archive-gliding', '');
-  const start = performance.now();
-  const state = { el, frame: 0, timer: 0 };
-  const land = () => {
-    el.scrollTop = to;
-    if (glide === state) stopGlide();
+/** Repeats the rows, and their snap points, above and below the real ones. Copies are
+ *  skipped by screen readers. */
+function fillLoop() {
+  period = 0;
+  home = 0;
+  const list = scrollEl?.querySelector('.archive');
+  const snaps = scrollEl?.querySelector('[data-archive-snaps]');
+  if (!list) return [];
+  list.querySelectorAll('[data-archive-copy]').forEach((copy) => copy.remove());
+  snaps?.querySelectorAll('[data-archive-copy]').forEach((copy) => copy.remove());
+  const items = [...list.querySelectorAll('.archive__item')];
+  const snapItems = snaps ? [...snaps.children] : [];
+  if (!items.length) return [];
+  const makeSet = (source) => {
+    const fragment = document.createDocumentFragment();
+    source.forEach((item) => {
+      const copy = item.cloneNode(true);
+      copy.removeAttribute('data-archive-before');
+      copy.setAttribute('data-archive-copy', '');
+      copy.setAttribute('aria-hidden', 'true');
+      fragment.append(copy);
+    });
+    return fragment;
   };
-  const tick = (now) => {
-    const t = Math.min(1, (now - start) / duration);
-    el.scrollTop = from + (to - from) * easeOut(t);
-    if (t < 1) state.frame = requestAnimationFrame(tick);
-    else land();
-  };
-  state.frame = requestAnimationFrame(tick);
-  // A background tab never runs frames. Land there anyway.
-  state.timer = window.setTimeout(land, duration + 200);
-  glide = state;
-}
-
-/** Where the footer rests under the header. */
-function footerStop() {
-  const footer = scrollEl.querySelector('.site-footer');
-  if (!footer) return scrollEl.scrollHeight - scrollEl.clientHeight;
-  const top = footer.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
-  const pad = parseFloat(getComputedStyle(scrollEl).scrollPaddingTop) || 0;
-  return Math.min(scrollEl.scrollHeight - scrollEl.clientHeight, Math.max(0, top - pad));
-}
-
-/**
- * Opening the menu runs the list to its end, every row passing the bar, so the footer
- * comes up under the header like the bottom of any page. Closing runs it back to the
- * row the menu found. Returns false when there is no archive list to move.
- */
-export function showArchiveFooter(show) {
-  if (document.body.dataset.page !== 'archive' || !scrollEl || !rows.length) return false;
-  if (show) {
-    if (menuReturn === null) menuReturn = scrollEl.scrollTop;
-    glideTo(footerStop());
-    return true;
+  // One copy below first, to measure a set. Offsets ignore the rows' own moves.
+  list.append(makeSet(items));
+  const firstCopy = list.querySelector('[data-archive-copy]');
+  period = firstCopy.offsetTop - items[0].offsetTop;
+  if (period <= 0) {
+    period = 0;
+    return items;
   }
-  if (menuReturn === null) return true;
-  const back = menuReturn;
-  menuReturn = null;
-  glideTo(back);
-  return true;
+  const screen = scrollEl.clientHeight || window.innerHeight;
+  const sets = Math.min(100, Math.ceil((LOOP_REACH + screen) / period));
+  for (let set = 1; set < sets; set += 1) list.append(makeSet(items));
+  const above = document.createDocumentFragment();
+  for (let set = 0; set < sets; set += 1) above.append(makeSet(items));
+  list.prepend(above);
+  if (snaps && snapItems.length) {
+    const below = document.createDocumentFragment();
+    for (let set = 0; set < sets * 2; set += 1) below.append(makeSet(snapItems));
+    snaps.append(below);
+  }
+  // Scrolled to 0 the first row rests under the bar; the real first row is `sets` sets on.
+  home = period * sets;
+  scrollEl.scrollTop = home;
+  return [...list.querySelectorAll('.archive__item')];
 }
 
-// Scrolling by hand while the menu has the footer up: closing leaves the list there.
-function onUserScroll() {
-  if (glide) stopGlide();
-  menuReturn = null;
+/** Back towards the real rows by whole sets, once the scroll has stopped. Nothing moves on screen. */
+function recentre() {
+  if (!scrollEl || period <= 0) return;
+  endLight();
+  const away = scrollEl.scrollTop - home;
+  const sets = away > 0 ? Math.floor(away / period) : Math.ceil(away / period);
+  if (!sets) return;
+  scrollEl.scrollTop -= sets * period;
 }
 
 /* ---------- Keys ---------- */
@@ -300,7 +379,11 @@ function onKeyDown(event) {
   const moves = { ArrowDown: pitch, ArrowUp: -pitch, PageDown: page, PageUp: -page, ' ': event.shiftKey ? -page : page };
   if (event.key === 'Home' || event.key === 'End') {
     event.preventDefault();
-    scrollEl.scrollTo({ top: event.key === 'Home' ? 0 : footerStop(), behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+    // The first or the last row of the set on screen.
+    const into = period > 0 ? (((scrollEl.scrollTop - home) % period) + period) % period : scrollEl.scrollTop;
+    const first = scrollEl.scrollTop - into;
+    const top = event.key === 'Home' ? first : first + Math.max(0, (period || scrollEl.scrollHeight) - pitch);
+    scrollEl.scrollTo({ top, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
     return;
   }
   if (!(event.key in moves)) return;
@@ -322,12 +405,13 @@ function scheduleLayout() {
 }
 
 function detach() {
-  stopGlide();
+  endLight();
   folding = false;
-  menuReturn = null;
+  stopScrollEnd?.();
+  stopScrollEnd = null;
+  period = 0;
+  home = 0;
   scrollEl?.removeEventListener('scroll', onScroll);
-  scrollEl?.removeEventListener('wheel', onUserScroll);
-  scrollEl?.removeEventListener('touchstart', onUserScroll);
   observer?.disconnect();
   observer = null;
   below?.disconnect();
@@ -338,6 +422,7 @@ function detach() {
   layoutFrame = 0;
   if (followFrame) cancelAnimationFrame(followFrame);
   followFrame = 0;
+  commitFollow();
   lastAlign = '';
   lastShift = '';
   scrollEl = null;
@@ -353,10 +438,26 @@ function detach() {
  */
 let endTween = null;
 
+/**
+ * How wide the shut header looks: up to the end of its last piece before the bar. Safari
+ * sizes the header's own box with the bar's labels too, so the box can be far wider than
+ * what shows, and a tween from there jumped the bar half open. Offsets ignore transforms.
+ */
+function rowWidth(header) {
+  let right = 0;
+  [...header.children].forEach((child) => {
+    if (child.matches('[data-archive-columns]') || !child.getClientRects().length) return;
+    if (getComputedStyle(child).position === 'absolute') return;
+    right = Math.max(right, child.offsetLeft + child.offsetWidth);
+  });
+  return right;
+}
+
 function tweenWidth(header, open) {
   const columns = header.querySelector('[data-archive-columns]');
   const still = [header, columns].filter(Boolean);
-  const from = header.getBoundingClientRect().width;
+  const shut = !header.classList.contains('is-archive-open') && !header.style.width;
+  const from = shut ? rowWidth(header) : header.getBoundingClientRect().width;
   endTween?.();
 
   still.forEach((element) => {
@@ -364,7 +465,7 @@ function tweenWidth(header, open) {
   });
   header.style.width = '';
   header.classList.toggle('is-archive-open', open);
-  const to = header.getBoundingClientRect().width;
+  const to = open ? header.getBoundingClientRect().width : rowWidth(header);
   header.classList.toggle('is-archive-open', !open);
   header.style.width = `${from}px`;
   header.offsetWidth;
@@ -397,10 +498,15 @@ function easeOpen(header) {
     header.style.transition = '';
     return;
   }
-  requestAnimationFrame(() => {
+  const open = () => {
     if (document.body.dataset.page !== 'archive' || header.classList.contains('is-archive-open')) return;
     tweenWidth(header, true);
-  });
+  };
+  // The header row may still be sliding into its archive places (News moves out of the row,
+  // header.js). The bar opens once that has landed.
+  const wait = Math.max(0, (header.rowSettleAt || 0) - performance.now());
+  if (wait > 0) window.setTimeout(() => requestAnimationFrame(open), wait);
+  else requestAnimationFrame(open);
 }
 
 export function setUpArchive() {
@@ -416,18 +522,17 @@ export function setUpArchive() {
   scrollEl = document.querySelector('[data-archive-scroll]');
   if (scrollEl) {
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
-    scrollEl.addEventListener('wheel', onUserScroll, { passive: true });
-    scrollEl.addEventListener('touchstart', onUserScroll, { passive: true });
     scrollEl.scrollTop = 0;
+    scrollEl.querySelectorAll('.archive__item').forEach((row) => row.removeAttribute('data-archive-before'));
   }
-  rows = scrollEl ? [...scrollEl.querySelectorAll('.archive__item')] : [];
-  rows.forEach((row) => row.removeAttribute('data-archive-before'));
+  rows = scrollEl ? fillLoop() : [];
+  if (scrollEl && period > 0) stopScrollEnd = watchScrollEnd(scrollEl, recentre);
 
   const columns = headerEl.querySelector('[data-archive-columns]');
   if (columns && typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(() => {
       // Skip while the menu is open: followMenu keeps the list with the shrinking columns.
-      if (headerEl?.hasAttribute('data-open') || glide) return;
+      if (headerEl?.hasAttribute('data-open')) return;
       scheduleLayout();
     });
     observer.observe(columns);
@@ -511,6 +616,7 @@ export function collapseArchive() {
 
 window.addEventListener('resize', () => {
   if (document.body.dataset.page !== 'archive') return;
+  endLight();
   scheduleLayout();
 });
 

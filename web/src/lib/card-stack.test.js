@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEPTH_RISE, depthOf, cardStackStyle } from './card-stack.js';
+import {
+  DEPTH_RISE,
+  OPEN_BLUR,
+  OPEN_FADE,
+  cardStackStyle,
+  depthOf,
+  follow,
+  loopOffset,
+  openPileStyle,
+} from './card-stack.js';
 
 test('the card at the position is in front, the next ones behind it', () => {
   assert.equal(depthOf(0, 0, 6), 0);
@@ -78,4 +87,47 @@ test('reduced motion keeps a leaving card in place', () => {
 
 test('deep cards are not drawn', () => {
   assert.equal(cardStackStyle(6).opacity, 0);
+});
+
+test('following a target eases toward it without passing it', () => {
+  // A tenth of the duration closes half the gap, as the expo-out does.
+  assert.equal(follow(0, 1, 50, 500), 0.5);
+  assert.ok(follow(0, 1, 500, 500) > 0.99);
+  assert.ok(follow(0, 1, 500, 500) <= 1);
+  assert.equal(follow(0, 1, 16, 0), 1);
+  assert.equal(follow(0.3, 1, 0, 500), 0.3);
+});
+
+test('following in steps lands where one long step does', () => {
+  let value = 0;
+  for (let i = 0; i < 10; i += 1) value = follow(value, 4, 16, 500);
+  assert.ok(Math.abs(value - follow(0, 4, 160, 500)) < 1e-9);
+});
+
+test('loop offsets go the short way round', () => {
+  assert.equal(loopOffset(0, 0, 6), 0);
+  assert.equal(loopOffset(1, 0, 6), 1);
+  assert.equal(loopOffset(5, 0, 6), -1);
+  assert.equal(loopOffset(0, 5.5, 6), 0.5);
+  assert.equal(loopOffset(2, 0, 3), -1);
+  assert.equal(loopOffset(0, 12, 3), 0);
+});
+
+test('an opening product blurs and fades the pile behind it', () => {
+  const style = cardStackStyle(2);
+  assert.deepEqual(openPileStyle(style, 0), style);
+  const open = openPileStyle(style, 1);
+  assert.equal(open.blur, style.blur + OPEN_BLUR);
+  assert.ok(Math.abs(open.opacity - style.opacity * (1 - OPEN_FADE)) < 1e-9);
+  assert.equal(open.y, style.y);
+});
+
+test('the pile disappears completely, and evenly over the opening, not all at the start', () => {
+  const style = cardStackStyle(1);
+  assert.equal(OPEN_FADE, 1);
+  assert.equal(openPileStyle(style, 1).opacity, 0);
+  // A tenth of the way in, most of it is still there; half way, about half.
+  assert.ok(openPileStyle(style, 0.1).opacity > style.opacity * 0.9);
+  const half = openPileStyle(style, 0.5).opacity / style.opacity;
+  assert.ok(half > 0.4 && half < 0.6);
 });

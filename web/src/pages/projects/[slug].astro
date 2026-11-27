@@ -101,11 +101,24 @@ const poster = kind === 'image' ? media : media?.poster;
     }
 
     <div class="project__cursor" data-project-cursor hidden aria-hidden="true">
+      {/* Outline only. project.js shows play while paused and pause while playing. Stroke 0.6 of
+          the 12-unit box is 1px at the 20px drawn size; project.css scales it to half, so 0.5px. */}
       <svg data-icon="play" viewBox="0 0 12 12" aria-hidden="true">
-        <path d="M2.2 1.1v9.8L10.6 6z" fill="currentColor"></path>
+        <path
+          d="M2.5 1.3v9.4L10.3 6z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="0.6"
+          stroke-linejoin="miter"
+        ></path>
       </svg>
       <svg data-icon="pause" viewBox="0 0 12 12" hidden aria-hidden="true">
-        <path d="M1.8 1h3v10h-3zm5.4 0h3v10h-3z" fill="currentColor"></path>
+        <path
+          d="M2.5 1.5h2v9h-2zm5 0h2v9h-2z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="0.6"
+        ></path>
       </svg>
     </div>
   </article>

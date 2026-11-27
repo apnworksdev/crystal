@@ -69,3 +69,47 @@ export function cardStackStyle(depth, reducedMotion = false, count = Infinity) {
     z: 1001,
   };
 }
+
+// Moving by hand (the merch pile, a product's pictures): input sets a target and one frame
+// loop eases toward it, so a burst of fast scrolling only moves the target further.
+
+/**
+ * One frame of easing from `from` toward `to`, `elapsed` milliseconds long. Following a
+ * target that stands still, it traces the shared expo-out (--ease-out) over `duration`.
+ */
+export function follow(from, to, elapsed, duration) {
+  if (!(duration > 0) || !(elapsed > 0)) return elapsed > 0 ? to : from;
+  return to - (to - from) * 2 ** ((-10 * elapsed) / duration);
+}
+
+/**
+ * How far card `index` is from `position` on a loop of `count` cards, the short way
+ * round: from -count / 2 up to (not including) count / 2.
+ */
+export function loopOffset(index, position, count) {
+  if (count <= 0) return 0;
+  return ((((index - position + count / 2) % count) + count) % count) - count / 2;
+}
+
+/** The pile behind an open product: how much more it blurs, and how much of it fades. */
+export const OPEN_BLUR = 20;
+export const OPEN_FADE = 1;
+
+/** An even ease in and out, so a fade is seen to happen (the expo-out was a cut on phone). */
+function evenEase(t) {
+  const x = Math.max(0, Math.min(1, t));
+  return x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2;
+}
+
+/**
+ * A pile card's style while a product opens over it: `progress` runs evenly in time from 0
+ * (the merch pile) to 1 (the product's pictures in front, the pile gone).
+ */
+export function openPileStyle(style, progress) {
+  const open = evenEase(progress);
+  return {
+    ...style,
+    blur: style.blur + OPEN_BLUR * open,
+    opacity: style.opacity * (1 - OPEN_FADE * open),
+  };
+}

@@ -2,6 +2,13 @@
    screen tall: the still and the column bar stay put and only the rows scroll, so the still
    of the row under the pointer is always in view. */
 
+/* Behaviour: work.js moves this every frame while the menu opens. Not inherited, so only the
+   list itself is restyled, not each of its many rows (Safari could not keep up). */
+@property --work-list-inset {
+  syntax: '*';
+  inherits: false;
+}
+
 body[data-work-view='list']:has([data-work-list]) {
   height: 100dvh;
   overflow: hidden;
@@ -259,5 +266,21 @@ body[data-work-view='list'] .work-list[hidden] {
 
   .work-list__filters {
     display: none;
+  }
+
+  /* No hover state on a phone: a tap would leave a row coloured. The still follows the row on
+     the line under it instead (work.js). Keyboard focus still shows. Behaviour: the rows
+     settle on that line. */
+  .work-list__row:hover:not(:focus-visible) {
+    color: var(--black);
+  }
+
+  .work-list__rows {
+    scroll-snap-type: y mandatory;
+    scroll-padding-top: var(--small-gap);
+  }
+
+  .work-list__rows > li:not([data-work-spacer]) {
+    scroll-snap-align: start;
   }
 }

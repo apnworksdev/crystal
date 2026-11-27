@@ -2,7 +2,7 @@
    picture sits in the center, the same size as its card in the merch pile, and the rest of
    the pile stays behind it, blurred and nearly gone. Desktop: the pictures run in a row and
    the neighbours are cut off at the sides. Phone: they run in a column, cut off top and
-   bottom. */
+   bottom. product-strip.js places every picture. */
 
 /* Behaviour: the page is one screen and does not scroll, so the footer is never reached.
    Every scroll goes to the strip instead (product-strip.js). Same as Merch. */
@@ -11,23 +11,15 @@ body:has([data-product-strip]) {
   overflow: hidden;
 }
 
-/* Behaviour: the strip is a sideways scroller. The stage stays put (sticky) while the
-   run behind it gives the scroll its length, and product-strip.js turns the scroll
-   position into the track's movement. */
+/* Behaviour: the strip does not scroll. product-strip.js turns the wheel, a drag and the
+   arrow keys into the pictures' movement, so the browser's own panning is off too. */
 .product-strip {
   display: flex;
   height: 100dvh;
-  /* Behaviour: product-strip.js moves the strip. Native sideways scrolling also took the
-     drift of vertical swipes, so the pictures twitched. */
-  overflow-x: hidden;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  touch-action: none;
   cursor: grab;
-}
-
-.product-strip::-webkit-scrollbar {
-  display: none;
 }
 
 .product-strip:active {
@@ -64,17 +56,11 @@ body:has([data-product-strip]) {
   overflow: hidden;
 }
 
-.product-strip__run {
-  flex: none;
-  width: calc(var(--reel-steps) * 60vw);
-}
-
+/* Behaviour: every picture sits in the middle of the stage, and product-strip.js moves
+   each one from there. */
 .product-strip__track {
-  display: flex;
-  align-items: center;
-  gap: 27.5vh;
-  width: max-content;
-  will-change: transform;
+  position: absolute;
+  inset: 0;
 }
 
 /* The merch pile behind the pictures (ProductStrip.astro places each card). */
@@ -97,14 +83,18 @@ body:has([data-product-strip]) {
    there: the base width times the product's size, never wider than the screen. */
 .product-strip__card,
 .product-strip__ghost {
-  --card-w: min(min(62.9vw, 44vh) * var(--size, 1), 100vw - var(--margin) * 2);
+  --card-w: min(min(62.9vw, 44vh) * var(--size, 1), 100vw - 24px);
   width: var(--card-w);
 }
 
 .product-strip__card {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   margin: 0;
-  flex: none;
+  transform: translate(-50%, -50%);
+  /* Behaviour: product-strip.js moves these every frame. */
+  will-change: transform, opacity;
 }
 
 .product-strip__ghost img,
@@ -133,19 +123,10 @@ body:has([data-product-strip]) {
   height: 100%;
 }
 
-/* Phone: the pictures run in a column (product-strip.js moves it up and down). */
+/* Phone: as wide as on the merch page (merch-reel.css), nearly the full width. */
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
-  .product-strip__track {
-    flex-direction: column;
-    width: auto;
-    height: max-content;
-  }
-}
-
-/* Behaviour: on touch screens product-strip.js moves the strip one picture per swipe, up
-   or sideways, so the browser's own panning is turned off here. */
-@media (pointer: coarse) {
-  .product-strip {
-    touch-action: none;
+  .product-strip__card,
+  .product-strip__ghost {
+    --card-w: 85vw;
   }
 }

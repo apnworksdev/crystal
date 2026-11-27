@@ -22,9 +22,9 @@ const projects = await getArchiveProjects();
             </li>
           ))}
         </ol>
-        {/* Snap points, one per row at its own place. The rows move to skip the bar, so the
+        {/* Snap points, one per row at its own place (archive.js repeats them with the rows). The rows move to skip the bar, so the
             scroll snaps to these instead, which never move. */}
-        <div class="archive__snaps" aria-hidden="true">
+        <div class="archive__snaps" aria-hidden="true" data-archive-snaps>
           {projects.map(() => <div class="archive__snap" />)}
         </div>
       </Fragment>

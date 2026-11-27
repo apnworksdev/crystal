@@ -179,6 +179,15 @@
   white-space: nowrap;
 }
 
+/* A title with a link underlines on hover. Added by Claude: restyle freely. */
+@media (hover: hover) {
+  a.news-panel__item-title:is(:hover, :focus-visible) {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    outline: none;
+  }
+}
+
 .news-panel__item-title[hidden],
 .news-panel__image[hidden] {
   display: none;
@@ -272,12 +281,16 @@ body[data-page='archive'] .site-header[data-news]:not([data-about]) .news-panel:
     order: 1;
   }
 
+  /* Behaviour: docked at an edge, the panel unfolds away from the header row, so it opens
+     and closes from that edge rather than from its own middle. */
   body:is(:has([data-roulette]), :has([data-merch-reel]), [data-page='product'], :not([data-work-view='list']):has([data-reel])) .site-header[data-news] .news-panel:not([hidden]) {
     align-self: flex-end;
+    clip-path: inset(calc((1 - var(--news)) * (100% - var(--height-bubble))) 0 0 0);
   }
 
   body[data-work-view='list']:has([data-work-list]) .site-header[data-news] .news-panel:not([hidden]) {
     align-self: flex-start;
+    clip-path: inset(0 0 calc((1 - var(--news)) * (100% - var(--height-bubble))) 0);
   }
 
   /* Archive: the bar fills the header row, so the panel sits over it, beside c and +,

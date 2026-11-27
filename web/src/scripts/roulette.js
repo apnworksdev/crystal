@@ -3,19 +3,41 @@
 // wider picture shrinks further so it stays smaller than the centre.
 
 import EmblaCarousel from 'embla-carousel';
-import { WheelGesturesPlugin } from 'embla-carousel-wheel-gestures';
 import { closeNav, setHeaderProject } from './header.js';
 
 // Embla's duration is a physics constant, not milliseconds: lower is quicker.
 // About 11 is a third of a second for one step.
 const STEP_DURATION = 11;
-// Released flicks glide this much quicker than Embla's default glide.
-const GLIDE_SPEED = 0.5;
+
+// Wheel, trackpad and drag all feed one input, as on the reference site: every
+// pixel moves the row the same share of a project there, then the row eases
+// after it (about an eighth of a second to close most of the gap) and rests
+// wherever it stops. No snap, so a single wheel notch is never pulled back.
+// The reference row gives a centred project 598px at a 1000px tall window
+// (a 915px wide one caps it), and a phone column one width (less 24px of
+// gutters) of a 598 x 474 picture.
+const REFERENCE_WIDTH = 598;
+const REFERENCE_RATIO = 598 / 474;
+const phone = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)');
+// Embla's spring with almost no carry-over, so it closes about 13% of the gap a frame from the
+// first frame on, as the reference's glide does. Embla's usual spring starts slower and felt heavy.
+const FOLLOW_DURATION = 0.85;
+const FOLLOW_FRICTION = 0.1;
+// A Firefox wheel notch in lines comes out near Chrome's 100px.
+const LINE_HEIGHT = 33;
+// Letting go of a drag keeps its speed and loses 8% of it every 16ms.
+const FLING_DECAY = 0.92;
+const FLING_FRAME = 16;
+// A touch that moves less than this stays a tap.
+const TAP_DISTANCE = 8;
 
 let embla;
 let root;
 let frontIndex = -1;
 let pictureObserver;
+let drag = null;
+let fling = 0;
+let swallowClick = false;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 function snapDelta(snap, progress) {
@@ -37,14 +59,102 @@ function armScroll(steps) {
   embla.internalEngine().options.duration = duration;
 }
 
-/**
- * Free mode keeps the full momentum of a flick, so a big scroll carries on for a while.
- * It would stop between two pictures, so the end of the glide is moved to the nearest project.
- */
-function landOnProject(api) {
-  const engine = api.internalEngine();
-  engine.scrollBody.useDuration(engine.scrollBody.duration() * GLIDE_SPEED);
-  engine.scrollTo.distance(0, true);
+function projectLength() {
+  if (phone.matches) return (innerWidth - 24) / REFERENCE_RATIO;
+  return REFERENCE_WIDTH * Math.min(innerHeight / 1000, innerWidth / 915);
+}
+
+// Moves the row by pixels of the reference row. Positive goes to the next project.
+function nudge(pixels) {
+  if (!embla || !pixels) return;
+  const engine = embla.internalEngine();
+  const snaps = engine.scrollSnaps;
+  const step = snaps.length > 1 ? Math.abs(snaps[1] - snaps[0]) : engine.containerRect.width;
+  engine.scrollBody
+    .useDuration(reducedMotion.matches ? 0 : FOLLOW_DURATION)
+    .useFriction(FOLLOW_FRICTION);
+  engine.scrollTo.distance((-pixels * step) / projectLength(), false);
+}
+
+function onWheel(event) {
+  if (event.ctrlKey) return;
+  event.preventDefault();
+  closeNav();
+  const unit = event.deltaMode === 1 ? LINE_HEIGHT : event.deltaMode === 2 ? innerHeight : 1;
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  nudge(delta * unit);
+}
+
+// A dragged link would start the browser's own drag and cancel ours.
+function onDragStart(event) {
+  event.preventDefault();
+}
+
+function endDrag() {
+  removeEventListener('pointermove', onPointerMove);
+  removeEventListener('pointerup', onPointerUp);
+  removeEventListener('pointercancel', onPointerUp);
+  drag = null;
+}
+
+function onPointerDown(event) {
+  if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  cancelAnimationFrame(fling);
+  closeNav();
+  swallowClick = false;
+  drag = {
+    id: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    lastTime: event.timeStamp,
+    speed: 0,
+    moved: false,
+  };
+  addEventListener('pointermove', onPointerMove);
+  addEventListener('pointerup', onPointerUp);
+  addEventListener('pointercancel', onPointerUp);
+}
+
+// The row follows the finger along whichever axis it moves most.
+function onPointerMove(event) {
+  if (!drag || event.pointerId !== drag.id) return;
+  if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < TAP_DISTANCE) return;
+  drag.moved = true;
+  const dx = event.clientX - drag.lastX;
+  const dy = event.clientY - drag.lastY;
+  const delta = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
+  const elapsed = Math.max(8, event.timeStamp - drag.lastTime);
+  drag.speed = delta / elapsed;
+  drag.lastX = event.clientX;
+  drag.lastY = event.clientY;
+  drag.lastTime = event.timeStamp;
+  nudge(-delta);
+}
+
+function onPointerUp(event) {
+  if (!drag || event.pointerId !== drag.id) return;
+  const { moved, lastTime } = drag;
+  // A finger held still before letting go has no speed left.
+  let speed = event.timeStamp - lastTime > 100 ? 0 : drag.speed;
+  endDrag();
+  if (!moved) return;
+  // The drag does not also count as a click on the picture under it.
+  swallowClick = true;
+  setTimeout(() => (swallowClick = false), 50);
+  if (event.type === 'pointercancel' || reducedMotion.matches) return;
+
+  let last = performance.now();
+  const step = (now) => {
+    const elapsed = Math.min(50, now - last);
+    last = now;
+    speed *= FLING_DECAY ** (elapsed / FLING_FRAME);
+    if (Math.abs(speed * FLING_FRAME) < 0.5) return;
+    nudge(-speed * elapsed);
+    fling = requestAnimationFrame(step);
+  };
+  fling = requestAnimationFrame(step);
 }
 
 function scrollToProject(index) {
@@ -249,6 +359,12 @@ function onSlideClick(event) {
   if (!embla || !root) return;
   const link = event.target.closest('[data-roulette-link]');
   if (!link || !root.contains(link)) return;
+  if (swallowClick) {
+    swallowClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
 
   const slide = link.closest('.project-roulette__slide');
   const index = embla.slideNodes().indexOf(slide);
@@ -280,15 +396,15 @@ function onKeyDown(event) {
   }
 }
 
-function onInteract() {
-  closeNav();
-}
-
 export function setUpRoulette() {
   if (root) {
-    root.removeEventListener('pointerdown', onInteract);
-    root.removeEventListener('wheel', onInteract);
+    root.removeEventListener('wheel', onWheel);
+    const oldViewport = root.querySelector('.project-roulette__viewport');
+    oldViewport?.removeEventListener('pointerdown', onPointerDown);
+    oldViewport?.removeEventListener('dragstart', onDragStart);
   }
+  endDrag();
+  cancelAnimationFrame(fling);
 
   embla?.destroy();
   embla = undefined;
@@ -308,19 +424,15 @@ export function setUpRoulette() {
     {
       loop: true,
       align: 'center',
-      // Momentum after a flick. Reduced motion keeps the plain step-by-step snap.
-      dragFree: !reducedMotion.matches,
-      skipSnaps: true,
       containScroll: false,
       duration: reducedMotion.matches ? 8 : STEP_DURATION,
+      // Drag and wheel go through nudge(), like the reference site.
+      watchDrag: false,
     },
-    // Vertical wheel and trackpad drive the strip. Drag still scrubs sideways.
-    [WheelGesturesPlugin({ forceWheelAxis: 'y' })],
   );
 
   const paint = () => updateLevels(embla);
 
-  if (!reducedMotion.matches) embla.on('pointerUp', landOnProject);
   embla.on('init', paint);
   embla.on('reInit', paint);
   embla.on('scroll', paint);
@@ -345,8 +457,10 @@ export function setUpRoulette() {
   root.querySelectorAll('.project-roulette__media :is(img, video, iframe)').forEach((picture) => {
     pictureObserver.observe(picture);
   });
-  root.addEventListener('pointerdown', onInteract);
-  root.addEventListener('wheel', onInteract, { passive: true });
+  // Not passive: the wheel would otherwise also scroll or zoom the page. Only on Home.
+  root.addEventListener('wheel', onWheel, { passive: false });
+  viewport.addEventListener('pointerdown', onPointerDown);
+  viewport.addEventListener('dragstart', onDragStart);
   paint();
   // The row stays hidden until Embla has placed the slides, so it never shows unarranged.
   root.dataset.ready = '';

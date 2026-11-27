@@ -2,45 +2,61 @@
 // sit higher, blurred and fainter, and keep that depth as they come forward. Same stack as
 // the Work page (lib/card-stack.js). The front product's name shows in the header,
 // after Merch (header.js setHeaderProject), and changes as the next one comes forward.
+//
+// The page does not scroll. Input only moves a target: the wheel, a drag on a touch
+// screen, the arrow keys. One frame loop eases the pile toward it, so however fast the
+// input comes, the pile glides. A moment after the input stops, the target rounds to the
+// nearest product. As in the reference, the pile loops.
+//
+// Opening the front product hands the page over to the product (handoff.js): the pile
+// stays where it is, and the product page takes it from there (product-strip.js).
 
-import { cardStackStyle, depthOf } from '../lib/card-stack.js';
+import { cardStackStyle, depthOf, follow } from '../lib/card-stack.js';
+import { checkHandoff, handOff, handoffLeave, takeHandoff } from './handoff.js';
 import { closeNav, setHeaderProject } from './header.js';
-import { watchScrollEnd } from './scroll-end.js';
 
-// Settling onto a product: the shared expo-out (--ease-out, --grow-duration).
-const SETTLE_MS = 500;
-// The pile glides after the scroll instead of jumping with it: each frame it closes most of
-// the gap, so wheel steps and the settle blend into one movement. Milliseconds to close
-// about two thirds of the gap.
-const FOLLOW_MS = 70;
-// Where the pile is drawn, in products (1.5 is halfway from the second to the third).
-let shown = null;
-let lastPaint = 0;
-const easeOut = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
+// Wheel or drag distance that moves one product, in pixels (the reference's).
+const WHEEL_STEP = 120;
+const DRAG_STEP = 120;
+// The target rounds to a product this long after the last input.
+const SNAP_MS = 160;
+// A touch only counts as a drag past this distance; shorter, it stays a tap.
+const TAP_SLOP = 8;
+// After a drag the pile keeps going and slows down: the speed left after each 60th of a second.
+const FLING_DECAY = 0.92;
+const FRAME_MS = 1000 / 60;
+// The target never runs further ahead than this, in products: a burst of fast scrolling
+// keeps the movement going at a pace the eye can follow, instead of spinning through.
+const MAX_LEAD = 2;
 
-let root;
-let stopScrollEnd = () => {};
-let frame = 0;
-let wrapping = false;
-let settling = false;
-let settleFrame = 0;
-let dragged = false;
-let step = 1;
-let cycle = 1;
-// The run is this many laps of the pile, and the pile starts in the middle one. It only
-// goes back to the middle while the scroll is still (scrollend, or after a settle): moving
-// scrollTop during a phone's momentum stops or stutters the fling, so a flick must never
-// reach the end. 21 laps is far more than any flick covers.
-const LAPS = 21;
-const MIDDLE = Math.floor(LAPS / 2);
-const EDGE = 3;
-// The size the pile was measured at. A phone's address bar showing or hiding changes the
-// height a little mid-swipe; re-measuring then would move the pile under the finger.
-let measured = { width: 0, height: 0 };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+let root = null;
+// Where the pile is drawn and where it is going, in products (1.5 is halfway from the
+// second to the third). Both keep counting past the last product; depthOf wraps them.
+let shown = 0;
+let target = 0;
+let frame = 0;
+let lastFrame = 0;
+let snapTimer = 0;
+let touch = null;
+let fling = null;
+let suppressClick = false;
+let leaving = false;
 // The product whose name the header shows, so it is only set when the front one changes.
 let named = null;
 let nameTimer = 0;
+
+function cards() {
+  return root ? [...root.querySelectorAll('[data-merch-card]')] : [];
+}
+
+/** --grow-duration in milliseconds: the pile eases on the shared expo-out. */
+function motionMs() {
+  const ms = root ? parseFloat(getComputedStyle(root).getPropertyValue('--grow-duration')) * 1000 : NaN;
+  return Number.isFinite(ms) && ms > 0 ? ms : 500;
+}
+let duration = 500;
 
 /** Puts the front product's name in the header. The open menu or About has the row then. */
 function showName(card) {
@@ -70,45 +86,13 @@ document.addEventListener('crystal:menu-motion', () => {
   nameTimer = window.setTimeout(retry, 100);
 });
 
-function cards() {
-  return [...root.querySelectorAll('[data-merch-card]')];
-}
-
-function layout() {
-  const count = cards().length;
-  const run = root.querySelector('.merch-reel__run');
-  // Whole pixels: browsers round scrollTop, and a rounded-down position would read as
-  // the end of the previous lap, wrap, and settle a whole lap forward, over and over.
-  step = Math.round(root.clientHeight * 0.7) || 1;
-  cycle = Math.max(count, 1) * step;
-  if (run) run.style.height = `${cycle * LAPS}px`;
-  measured = { width: root.clientWidth, height: root.clientHeight };
-  return count;
-}
-
-/** The top of the lap the scroll is in. */
-function lapStart() {
-  return Math.floor((root.scrollTop + 1) / cycle) * cycle;
-}
-
-/** Back to the middle lap, by whole laps so nothing on screen moves. Only while still. */
-function wrap() {
-  if (!cycle) return;
-  const top = root.scrollTop;
-  if (top >= cycle * EDGE && top < cycle * (LAPS - EDGE)) return;
-  const mod = ((top % cycle) + cycle) % cycle;
-  wrapping = true;
-  root.scrollTop = cycle * MIDDLE + mod;
-  wrapping = false;
-}
-
 function place(card, { opacity, blur, y, scale = 1, z, active }) {
   card.style.visibility = opacity < 0.01 ? 'hidden' : 'visible';
   card.style.opacity = opacity.toFixed(3);
   card.style.filter = blur > 0.4 ? `blur(${blur.toFixed(2)}px)` : 'none';
   card.style.transform = `translate(-50%, -50%) translateY(${y.toFixed(2)}px) scale(${scale.toFixed(4)})`;
   card.style.zIndex = String(z);
-  // Runs every frame while scrolling: attributes change only when the front card does,
+  // Runs every frame while moving: attributes change only when the front card does,
   // since rewriting them restyles the card even with the same value.
   if (card.dataset.front === String(active)) return;
   card.dataset.front = String(active);
@@ -118,155 +102,120 @@ function place(card, { opacity, blur, y, scale = 1, z, active }) {
   else card.setAttribute('aria-hidden', 'true');
 }
 
-function paint(now = performance.now()) {
-  if (!root?.isConnected) return;
+function frontIndex(count) {
+  return ((Math.round(shown) % count) + count) % count;
+}
+
+function draw() {
   const list = cards();
   const count = list.length;
-  if (!count || !step) return;
-
-  const { index, local } = progress();
-  const target = index + local;
-  const elapsed = Math.min(64, Math.max(0, now - lastPaint));
-  lastPaint = now;
-  if (shown === null || reducedMotion.matches || count <= 1) shown = target;
-  else {
-    // The shorter way round the loop, so the last product runs straight into the first.
-    let gap = target - shown;
-    gap -= Math.round(gap / count) * count;
-    shown += gap * (1 - Math.exp(-elapsed / FOLLOW_MS));
-    shown = ((shown % count) + count) % count;
-    if (Math.abs(gap) < 0.001) shown = target;
-  }
-
-  const activeIndex = Math.round(shown) % count;
+  if (!count) return;
+  const active = frontIndex(count);
   list.forEach((card, i) => {
     const style = cardStackStyle(depthOf(i, shown, count), reducedMotion.matches, count);
-    place(card, { ...style, active: i === activeIndex && style.opacity > 0.4 });
+    place(card, { ...style, active: i === active && style.opacity > 0.4 });
   });
-  showName(list[activeIndex]);
-
-  cancelAnimationFrame(frame);
-  if (shown !== target) frame = requestAnimationFrame(paint);
+  showName(list[active]);
 }
 
-function progress() {
-  const count = cards().length;
-  const mod = ((root.scrollTop % cycle) + cycle) % cycle;
-  const scaled = step ? mod / step : 0;
-  let index = Math.floor(scaled);
-  let local = scaled - index;
-  // A sub-pixel short of a product counts as on it.
-  if (local > 0.995) {
-    index += 1;
-    local = 0;
-  }
-  if (index >= count) {
-    index = 0;
-    local = 0;
-  }
-  return { count, index, local };
-}
+function tick(now) {
+  frame = 0;
+  if (!root?.isConnected) return;
+  const elapsed = Math.min(64, Math.max(0, now - lastFrame));
+  lastFrame = now;
 
-function nearestTop() {
-  const { count, index, local } = progress();
-  if (!count) return root.scrollTop;
-  const base = lapStart();
-  const dest = local < 0.5 ? index : (index + 1) % count;
-  if (local >= 0.5 && dest === 0) return base + cycle;
-  return base + dest * step;
-}
-
-function cancelSettle() {
-  settling = false;
-  cancelAnimationFrame(settleFrame);
-}
-
-function animateTo(target) {
-  const start = root.scrollTop;
-  const delta = target - start;
-  if (Math.abs(delta) < 1) {
-    if (root.scrollTop !== target) {
-      wrapping = true;
-      root.scrollTop = target;
-      wrapping = false;
+  if (fling) {
+    const frames = elapsed / FRAME_MS;
+    target += (fling.speed * elapsed) / DRAG_STEP;
+    fling.speed *= FLING_DECAY ** frames;
+    if (Math.abs(fling.speed) * FRAME_MS < 0.5) {
+      fling = null;
+      snapSoon();
     }
-    wrap();
-    paint();
-    return;
   }
-  cancelSettle();
-  if (reducedMotion.matches) {
-    root.scrollTop = target;
-    wrap();
-    paint();
-    return;
-  }
-  settling = true;
-  const started = performance.now();
-  const tick = (now) => {
-    if (!settling) return;
-    const t = Math.min(1, (now - started) / SETTLE_MS);
-    const eased = easeOut(t);
-    root.scrollTop = start + delta * eased;
-    if (t < 1) settleFrame = requestAnimationFrame(tick);
-    else {
-      settling = false;
-      wrapping = true;
-      root.scrollTop = target;
-      wrapping = false;
-      wrap();
-      paint();
-    }
-  };
-  settleFrame = requestAnimationFrame(tick);
+
+  shown = reducedMotion.matches ? target : follow(shown, target, elapsed, duration);
+  if (Math.abs(target - shown) < 0.001) shown = target;
+  draw();
+  if (shown !== target || fling) frame = requestAnimationFrame(tick);
 }
 
-function settle() {
-  if (!root?.isConnected || root.hidden || settling) return;
-  animateTo(nearestTop());
+function wake() {
+  if (frame) return;
+  lastFrame = performance.now();
+  frame = requestAnimationFrame(tick);
 }
 
-function onScroll() {
-  if (wrapping) return;
-  if (!settling) dragged = true;
+function snapSoon() {
+  window.clearTimeout(snapTimer);
+  snapTimer = window.setTimeout(() => {
+    if (touch || fling) return;
+    target = Math.round(target);
+    wake();
+  }, SNAP_MS);
+}
+
+/** Moves the target by `products` (forward is positive). */
+function nudge(products) {
+  if (leaving || cards().length <= 1) return;
   closeNav();
-  cancelAnimationFrame(frame);
-  frame = requestAnimationFrame(paint);
+  target = Math.max(shown - MAX_LEAD, Math.min(shown + MAX_LEAD, target + products));
+  wake();
 }
 
-function onScrollEnd() {
-  if (settling || wrapping) return;
-  wrap();
-  settle();
+function onWheel(event) {
+  // The pile takes every wheel: the page does not scroll, and a sideways swipe does not go
+  // back a page. Whichever axis the gesture mostly goes along leads.
+  event.preventDefault();
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  if (!delta) return;
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? root.clientHeight : 1;
+  fling = null;
+  nudge((delta * unit) / WHEEL_STEP);
+  snapSoon();
 }
 
-function onResize() {
-  if (!root?.isConnected || root.clientHeight === 0 || !cycle) return;
-  // Height alone, by less than a fifth: the address bar. Keep the measured spacing.
-  const sameWidth = root.clientWidth === measured.width;
-  if (sameWidth && Math.abs(root.clientHeight - measured.height) < measured.height * 0.2) return;
-  const mod = ((root.scrollTop % cycle) + cycle) % cycle;
-  const fraction = mod / cycle;
-  layout();
-  wrapping = true;
-  root.scrollTop = cycle * (MIDDLE + fraction);
-  wrapping = false;
-  paint();
+// Touch: the finger pulls the pile. The cards behind sit above the front one, so dragging
+// down brings the next one forward (as in the reference). Letting go keeps it going.
+function onPointerDown(event) {
+  if (event.pointerType !== 'touch' || !event.isPrimary) return;
+  fling = null;
+  suppressClick = false;
+  touch = { id: event.pointerId, x: event.clientX, y: event.clientY, lastY: event.clientY, lastT: event.timeStamp, speed: 0, moved: false };
 }
 
-function onWheel() {
-  cancelSettle();
+function onPointerMove(event) {
+  if (!touch || event.pointerId !== touch.id) return;
+  if (!touch.moved && Math.hypot(event.clientX - touch.x, event.clientY - touch.y) < TAP_SLOP) return;
+  touch.moved = true;
+  const dy = event.clientY - touch.lastY;
+  const dt = Math.max(8, event.timeStamp - touch.lastT);
+  touch.speed = dy / dt;
+  touch.lastY = event.clientY;
+  touch.lastT = event.timeStamp;
+  nudge(dy / DRAG_STEP);
 }
 
-function onPointerDown() {
-  cancelSettle();
-  dragged = false;
-  closeNav();
+function onPointerUp(event) {
+  if (!touch || event.pointerId !== touch.id) return;
+  const { moved, speed, lastT } = touch;
+  touch = null;
+  if (!moved) return;
+  // The drag must not also count as a tap on the front product.
+  suppressClick = true;
+  window.setTimeout(() => (suppressClick = false), 50);
+  const stale = event.timeStamp - lastT > 100;
+  if (!stale && event.type !== 'pointercancel' && !reducedMotion.matches) {
+    fling = { speed };
+    wake();
+  } else snapSoon();
 }
 
-function onPointerUp() {
-  if (!root?.isConnected || root.hidden || dragged || settling) return;
-  settle();
+function onClickCapture(event) {
+  if (!suppressClick) return;
+  suppressClick = false;
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function onKeyDown(event) {
@@ -277,62 +226,112 @@ function onKeyDown(event) {
     const tag = event.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target.isContentEditable) return;
   }
-
   const down = event.key === 'ArrowDown' || event.key === 'ArrowRight';
   const up = event.key === 'ArrowUp' || event.key === 'ArrowLeft';
   if (!down && !up) return;
   event.preventDefault();
-  closeNav();
-  const { count, index, local } = progress();
-  if (count <= 1) return;
-  let dest;
-  if (down) dest = (index + 1) % count;
-  else dest = local > 0.001 ? index : (index - 1 + count) % count;
-  const base = lapStart();
-  let target = base + dest * step;
-  if (down && dest === 0) target = base + cycle;
-  if (!down && dest > index) target = base - step;
-  animateTo(target);
+  fling = null;
+  window.clearTimeout(snapTimer);
+  const rest = Math.round(target);
+  nudge(rest + (down ? 1 : -1) - target);
 }
 
+// Opening a product ------------------------------------------------------------------
+
+const routed = () => Boolean(document.querySelector('[name="astro-view-transitions-enabled"]'));
+const trim = (pathname) => pathname.replace(/\/+$/, '');
+
+/**
+ * Leaving for `pathname`: when it is the front product, the pile stops where it is and the
+ * product page carries on from it (product-strip.js). Its code is fetched first, so the
+ * new page is placed the moment it arrives.
+ */
+function leaveTo(pathname) {
+  if (!root?.isConnected || leaving || reducedMotion.matches || !routed()) return;
+  const list = cards();
+  if (!list.length) return;
+  const index = frontIndex(list.length);
+  const card = list[index];
+  if (trim(new URL(card.href, location.href).pathname) !== trim(pathname)) return;
+  leaving = true;
+  fling = null;
+  touch = null;
+  window.clearTimeout(snapTimer);
+  cancelAnimationFrame(frame);
+  frame = 0;
+  shown = target = Math.round(shown);
+  draw();
+  handOff(pathname, { from: 'merch' }, import('./product-strip.js'));
+}
+
+// Before page.js's own click handler (window runs before document in the capture phase),
+// so it skips the content fade.
+window.addEventListener(
+  'click',
+  (event) => {
+    if (!root?.isConnected || event.defaultPrevented) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+    if (!link || (link.target && link.target !== '_self')) return;
+    if (suppressClick && root.contains(link)) return;
+    const url = new URL(link.href, location.href);
+    if (url.origin === location.origin) leaveTo(url.pathname);
+  },
+  true,
+);
+
+// Back and forward, and any change that did not start with a click: before page.js reads it.
+window.addEventListener(
+  'astro:before-preparation',
+  (event) => {
+    checkHandoff(event.to.pathname);
+    if (!handoffLeave()) leaveTo(event.to.pathname);
+  },
+  true,
+);
+
+// ------------------------------------------------------------------------------------
+
 function unbind(reel) {
-  reel.removeEventListener('scroll', onScroll);
-  stopScrollEnd();
-  stopScrollEnd = () => {};
   reel.removeEventListener('wheel', onWheel);
   reel.removeEventListener('pointerdown', onPointerDown);
+  reel.removeEventListener('pointermove', onPointerMove);
+  reel.removeEventListener('pointerup', onPointerUp);
+  reel.removeEventListener('pointercancel', onPointerUp);
+  reel.removeEventListener('click', onClickCapture, true);
 }
 
 export function setUpMerchReel() {
   if (root) unbind(root);
   cancelAnimationFrame(frame);
-  cancelSettle();
+  frame = 0;
+  window.clearTimeout(snapTimer);
+  fling = null;
+  touch = null;
+  leaving = false;
+  named = null;
 
   root = document.querySelector('[data-merch-reel]');
-  named = null;
+  // page.js runs this on every page once the code is loaded: only Merch takes the hand-off.
   if (!root) return;
-  shown = null;
+  const arrival = takeHandoff();
+  duration = motionMs();
 
-  layout();
-  if (cards().length <= 1) {
-    root.style.overflowY = 'hidden';
-    wrapping = true;
-    root.scrollTop = 0;
-    wrapping = false;
-    paint();
-    return;
+  // Back from a product: that product is in front, as it was on its page.
+  const list = cards();
+  const from = arrival?.slug ? list.findIndex((card) => trim(new URL(card.href, location.href).pathname) === trim(arrival.slug)) : -1;
+  shown = target = Math.max(0, from);
+
+  if (list.length > 1) {
+    // Not passive: the pile takes the wheel. Only bound while Merch is open.
+    root.addEventListener('wheel', onWheel, { passive: false });
+    root.addEventListener('pointerdown', onPointerDown);
+    root.addEventListener('pointermove', onPointerMove, { passive: true });
+    root.addEventListener('pointerup', onPointerUp);
+    root.addEventListener('pointercancel', onPointerUp);
+    root.addEventListener('click', onClickCapture, true);
   }
-  root.style.overflowY = '';
-  wrapping = true;
-  root.scrollTop = cycle * MIDDLE;
-  wrapping = false;
-  root.addEventListener('scroll', onScroll, { passive: true });
-  stopScrollEnd = watchScrollEnd(root, onScrollEnd);
-  root.addEventListener('wheel', onWheel, { passive: true });
-  root.addEventListener('pointerdown', onPointerDown);
-  paint();
+  draw();
 }
 
 document.addEventListener('keydown', onKeyDown);
-document.addEventListener('pointerup', onPointerUp);
-window.addEventListener('resize', onResize);

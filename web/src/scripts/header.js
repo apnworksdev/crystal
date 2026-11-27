@@ -1,16 +1,9 @@
 // Open and closed state for the site header. Listeners stay on document so they
 // survive page transitions. setUpHeader runs again after each swap.
 
-import { collapseArchive, reopenArchiveBar, showArchiveFooter } from './archive.js';
+import { collapseArchive, reopenArchiveBar } from './archive.js';
 import { closeNewsWithAbout, dismissNews, openNewsWithAbout } from './news.js';
-import {
-  clearFooterReveal,
-  footerIsRaised,
-  homeFooterTop,
-  lowerFooter,
-  markFooterRaised,
-  raiseFooter,
-} from './footer-reveal.js';
+import { clearFooterReveal, footerIsRaised, homeFooterTop, lowerFooter, raiseFooter } from './footer-reveal.js';
 import { pinProductMorph, productMenuClosed, productMenuOpening } from './product.js';
 // Dragging the bottom edge of the About, Team and News windows (wires itself up once).
 import './box-resize.js';
@@ -20,6 +13,7 @@ let aboutOpen = false;
 let closeTimer = 0;
 let titleTimer = 0;
 let menuIdleTimer = 0;
+// Phone only: the column folds itself away after a while. On desktop the menu stays open.
 const MENU_IDLE_MS = 3000;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 // Same query as the phone blocks in the stylesheets.
@@ -147,7 +141,11 @@ function alignListNav(header) {
 // Phone: List and Stack sit where the column opens. They fade out in place instead of
 // jumping with the column and vanishing, and fade back once it has closed.
 let viewsFade = null;
-const EXPO = 'cubic-bezier(0.19, 1, 0.22, 1)';
+// A fade on the expo-out was three quarters done in its first frame, so on a phone it read
+// as a cut. Fades use this even curve instead (--ease-fold), so they are seen to happen.
+const FADE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
+const FADE_OUT_MS = 300;
+const FADE_IN_MS = 400;
 
 function endViewsFade() {
   if (!viewsFade) return;
@@ -169,8 +167,8 @@ function fadeViewsOut(header) {
     header.setAttribute('data-views-fading', '');
     const now = views.getBoundingClientRect();
     views.style.translate = `${box.left - now.left}px ${box.top - now.top}px`;
-    const animation = views.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: EXPO, fill: 'forwards' });
-    viewsFade = { header, views, animation, timer: window.setTimeout(endViewsFade, 320) };
+    const animation = views.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_OUT_MS, easing: FADE_EASING, fill: 'forwards' });
+    viewsFade = { header, views, animation, timer: window.setTimeout(endViewsFade, FADE_OUT_MS + 20) };
   };
 }
 
@@ -179,10 +177,12 @@ function fadeViewsIn(header) {
   const views = header.querySelector('[data-work-views]');
   if (!phone.matches || reducedMotion.matches || !views || views.hidden) return;
   if (views.getAnimations().length) return;
-  views.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: EXPO });
+  views.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_IN_MS, easing: FADE_EASING });
 }
 
-function applyNav(open, moveFocus, currentHref) {
+/** `fromAbout`: the menu comes back as About closes, so the product title and price were
+ *  never showing and must not fade out (productMenuOpening would show them first). */
+function applyNav(open, moveFocus, currentHref, { fromAbout = false } = {}) {
   const header = document.querySelector('.site-header');
   if (!header) return;
 
@@ -208,11 +208,10 @@ function applyNav(open, moveFocus, currentHref) {
     measureBubbles(header);
     header.removeAttribute('data-closing');
     // Measured while the title is still shown, then kept over the Merch link as it shrinks.
-    productMenuOpening(header);
+    if (!fromAbout) productMenuOpening(header);
     const fadeViews = fadeViewsOut(header);
     header.setAttribute('data-open', '');
-    // After data-open, so a phone's open column is laid out and the footer stops under it.
-    raiseMenuFooter(header);
+    raiseMenuFooter();
     updateFooterPush();
     pinProductMorph();
     fadeViews?.();
@@ -325,6 +324,7 @@ function clearAboutMotion() {
 
 function hideAbout() {
   clearAboutMotion();
+  endTabSwap();
   const header = document.querySelector('.site-header');
   aboutOpen = false;
   if (!header) return;
@@ -398,31 +398,62 @@ function snapNavClosed(header) {
   setLinksInert(header, true);
 }
 
-/** Phone only: shows the copy, the team, or the shared news panel. Desktop ignores this. */
+/** The element that fills the panel for a tab: the copy, the team, or the shared news panel. */
+function aboutView(panel, tab) {
+  if (tab === 'team') return panel.querySelector('.about-panel__team');
+  if (tab === 'news') return panel.closest('.site-header')?.querySelector('[data-news-panel]');
+  return panel.querySelector('.about-panel__body');
+}
+
+function applyAboutTab(panel, tab) {
+  panel.dataset.aboutView = tab;
+  const scroller = tab === 'news'
+    ? aboutView(panel, tab)?.querySelector('[data-news-photos]')
+    : tab === 'team'
+      ? aboutView(panel, tab)
+      : panel.querySelector('.about-panel__text');
+  if (scroller) scroller.scrollTop = 0;
+}
+
+let tabSwap = null;
+
+function endTabSwap() {
+  if (!tabSwap) return;
+  window.clearTimeout(tabSwap.timer);
+  tabSwap.out?.cancel();
+  tabSwap = null;
+}
+
+/** Phone only: shows the copy, the team, or the shared news panel. Desktop ignores this.
+    In an open panel the old tab fades out, then the new one fades in (as in the reference). */
 function showAboutTab(panel, tab) {
   if (!panel) return;
-  panel.dataset.aboutView = tab;
   panel.querySelectorAll('.about-panel__tab').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.aboutTab === tab));
   });
+  endTabSwap();
   const header = panel.closest('.site-header');
-  const news = header?.querySelector('[data-news-panel]');
-  const scroller = tab === 'team'
-    ? panel.querySelector('.about-panel__team')
-    : tab === 'news'
-      ? news?.querySelector('[data-news-photos]')
-      : panel.querySelector('.about-panel__text');
-  if (scroller) scroller.scrollTop = 0;
-  // Phone: the view that takes the panel fades in rather than appearing at once.
-  const shownView = tab === 'team'
-    ? panel.querySelector('.about-panel__team')
-    : tab === 'news'
-      ? news
-      : panel.querySelector('.about-panel__body');
-  const switching = header?.hasAttribute('data-about');
-  if (switching && phone.matches && !reducedMotion.matches && shownView) {
-    shownView.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'cubic-bezier(0.19, 1, 0.22, 1)' });
+  const from = panel.dataset.aboutView;
+  const oldView = from && from !== tab ? aboutView(panel, from) : null;
+  if (!oldView || !header?.hasAttribute('data-about') || !phone.matches || reducedMotion.matches) {
+    applyAboutTab(panel, tab);
+    return;
   }
+  const fade = parseFloat(getComputedStyle(header).getPropertyValue('--fade-duration')) * 1000 || 300;
+  const outMs = Math.round(fade / 2);
+  const swap = {
+    out: oldView.animate([{ opacity: 1 }, { opacity: 0 }], { duration: outMs, easing: FADE_EASING, fill: 'forwards' }),
+    timer: 0,
+  };
+  // A timer, not the animation's end: a background tab never runs it.
+  swap.timer = window.setTimeout(() => {
+    if (tabSwap !== swap) return;
+    tabSwap = null;
+    applyAboutTab(panel, tab);
+    swap.out.cancel();
+    aboutView(panel, tab)?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: fade, easing: FADE_EASING });
+  }, outMs);
+  tabSwap = swap;
 }
 
 function openAbout(moveFocus) {
@@ -476,7 +507,7 @@ function finishAboutClose(moveFocus) {
   if (!aboutOpen) return;
   const header = document.querySelector('.site-header');
   hideAbout();
-  applyNav(true, moveFocus);
+  applyNav(true, moveFocus, undefined, { fromAbout: true });
   // The windows have narrowed back to the menu's width, so the menu is already there:
   // its boxes take their full size at once, and only the labels fade in.
   if (header && !phone.matches) {
@@ -760,6 +791,57 @@ export function prepareSectionLeave(nextPathname, currentPathname = location.pat
   return proceed(Promise.all([section, project, collapseArchive()]));
 }
 
+// The pieces of the header row. A new page can rearrange them: on the Archive, News hangs
+// below the column bar instead of sitting in the row, so the nav and the + move over.
+const EXPO_OUT = 'cubic-bezier(0.19, 1, 0.22, 1)';
+const ROW_PARTS = '.site-header__logo, [data-news-panel], .site-header__context, .site-header__nav, .site-header__toggle';
+let rowBefore = null;
+
+function rowPlaces(header) {
+  const origin = header.getBoundingClientRect();
+  const places = new Map();
+  header.querySelectorAll(ROW_PARTS).forEach((element) => {
+    if (element.parentElement !== header || !element.getClientRects().length) return;
+    const box = element.getBoundingClientRect();
+    places.set(element, { x: box.left - origin.left, y: box.top - origin.top });
+  });
+  return places;
+}
+
+/** Runs just before a page swap: where each piece sits in the header row. */
+export function rememberHeaderRow() {
+  rowBefore = null;
+  const header = document.querySelector('.site-header');
+  if (!header || reducedMotion.matches || document.body.dataset.page === 'project') return;
+  rowBefore = rowPlaces(header);
+}
+
+/** After the swap, pieces the new page moved slide there instead of jumping. */
+function slideHeaderRow(header) {
+  const before = rowBefore;
+  rowBefore = null;
+  if (!before || reducedMotion.matches || document.body.dataset.page === 'project') return;
+  const after = rowPlaces(header);
+  const ms = parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 || 500;
+  let moved = false;
+  after.forEach((place, element) => {
+    const from = before.get(element);
+    if (!from) return;
+    const dx = from.x - place.x;
+    const dy = from.y - place.y;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    moved = true;
+    element.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0px, 0px)' }], {
+      duration: ms,
+      easing: EXPO_OUT,
+      composite: 'add',
+    });
+  });
+  // When the slide has visually landed on the expo-out. The archive waits for it before its
+  // column bar opens, so the two never move over each other (archive.js).
+  header.rowSettleAt = moved ? performance.now() + ms * 0.56 : 0;
+}
+
 /** Syncs the active link without replaying the open/close menu animation. */
 export function setUpHeader() {
   const header = document.querySelector('.site-header');
@@ -783,6 +865,7 @@ export function setUpHeader() {
     views.hidden = !onWork;
   }
   header.classList.remove('is-views-out');
+  slideHeaderRow(header);
 
   if (document.body.dataset.page === 'project') dismissAbout();
 
@@ -810,7 +893,7 @@ export function setUpHeader() {
     setLinksInert(header, false);
     toggle?.removeAttribute('inert');
     // Menu stayed open across the swap: show this page's footer the same way.
-    raiseMenuFooter(header);
+    raiseMenuFooter();
     updateFooterPush();
     bumpMenuIdle();
     document.dispatchEvent(new CustomEvent('crystal:menu-motion'));
@@ -833,8 +916,8 @@ document.addEventListener('focusin', (event) => {
   if (event.target.closest('.site-header__nav, .site-header__toggle')) bumpMenuIdle();
 });
 
-// While the menu opens, each link is wiped in with a clip, and a clip also trims where
-// the link can be tapped. A quick tap then lands on the links' container instead. Hand
+// While the menu opens, each link grows from nothing, and a box still growing also trims
+// where the link can be tapped. A quick tap then lands on the links' container instead. Hand
 // it to the link whose full box is under the finger, so an early tap still works.
 document.addEventListener(
   'click',
@@ -927,7 +1010,7 @@ document.addEventListener('submit', (event) => {
 /** Restarts the idle close. Hover, focus or click on the menu counts as use. */
 function bumpMenuIdle() {
   window.clearTimeout(menuIdleTimer);
-  if (!navOpen || aboutOpen) return;
+  if (!navOpen || aboutOpen || !phone.matches) return;
   menuIdleTimer = window.setTimeout(() => {
     if (navOpen && !aboutOpen) applyNav(false, false);
   }, MENU_IDLE_MS);
@@ -938,23 +1021,16 @@ function clearMenuIdle() {
   menuIdleTimer = 0;
 }
 
-/** Shows the footer with the menu. The archive slides its list to the end instead, so
-    its footer arrives after the last row. */
-function raiseMenuFooter(header) {
+/** Desktop: shows the footer at the bottom of the screen with the menu, on every page. */
+function raiseMenuFooter() {
   // Phone: the menu opens on its own and the footer stays where it is. Closing then has
-  // nothing to lower (lowerFooter only undoes a raise it made).
-  if (phone.matches) return;
-  if (footerIsRaised()) return;
-  if (showArchiveFooter(true)) {
-    markFooterRaised();
-    return;
-  }
-  raiseFooter(header);
+  // nothing to lower.
+  if (phone.matches || footerIsRaised()) return;
+  raiseFooter();
 }
 
-/** Puts the footer back when the menu closes: the archive slides back to its row. */
+/** Puts the footer back below the screen when the menu closes. */
 function lowerMenuFooter() {
-  showArchiveFooter(false);
   lowerFooter();
 }
 

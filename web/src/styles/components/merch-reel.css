@@ -1,5 +1,5 @@
 /* Merch pile: every product sits in the stack. The front one is sharp; the ones behind
-   sit higher, blurred and fainter (lib/card-stack.js). Scrolling matches the Work stack. */
+   sit higher, blurred and fainter (lib/card-stack.js). merch-reel.js moves it. */
 
 body:has([data-merch-reel]) {
   height: 100dvh;
@@ -8,9 +8,11 @@ body:has([data-merch-reel]) {
 
 .merch-reel {
   height: 100dvh;
-  overflow-y: auto;
+  /* Behaviour: the reel does not scroll. merch-reel.js turns the wheel, a drag and the
+     arrow keys into the pile's movement, so the browser's own panning is off too. */
+  overflow: hidden;
   overscroll-behavior: contain;
-  scrollbar-width: none;
+  touch-action: none;
 }
 
 .merch-reel__stage {
@@ -23,10 +25,6 @@ body:has([data-merch-reel]) {
   box-sizing: border-box;
   /* The bigger products at the back spill past the sides. Clipped here so they don't make the reel scroll sideways. */
   overflow-x: clip;
-}
-
-.merch-reel__run {
-  height: calc(var(--reel-steps) * 70vh);
 }
 
 .merch-reel__stack {
@@ -63,11 +61,19 @@ body:has([data-merch-reel]) {
 
 .merch-reel__card {
   /* Each product is as wide as the base times its size (Studio: 1 is a cap, 2 a tote), and
-     never wider than the screen. The base is a cap's width: 44% of the screen height, or
-     62.9% of the width on a narrow screen. Its height follows its shape, so a tall product
-     can reach past the screen, as in the reference. */
-  --card-w: min(min(62.9vw, 44vh) * var(--size, 1), 100vw - var(--margin) * 2);
+     never wider than the screen less 24px. The base is a cap's width: 44% of the screen
+     height, or 62.9% of the width on a narrow screen. Its height follows its shape, so a
+     tall product can reach past the screen. All as in the reference. */
+  --card-w: min(min(62.9vw, 64vh) * var(--size, 1), 100vw - 24px);
   width: var(--card-w);
+}
+
+/* Phone: every product nearly fills the width, whatever its size. product-strip.css matches
+   it, so a product opens at the same size. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .merch-reel__card {
+    --card-w: 85vw;
+  }
 }
 
 .merch-reel__card img {
