@@ -15,6 +15,7 @@ import '../styles/common/transitions.css';
 import '../styles/components/header.css';
 import '../styles/components/footer.css';
 import '../styles/components/intro.css';
+import '../styles/components/rotate-notice.css';
 
 const { title, description, player = false, product = false } = Astro.props;
 const headerFlipClassic = headerFlipSource.replace(
@@ -132,6 +133,12 @@ const pageKind = player
       <div class="intro__plate" data-intro-plate>
         <Logo />
       </div>
+    </div>
+    {/* A phone held sideways sees this instead of the page (rotate-notice.css). The site is
+        laid out for a phone held upright; the project player still works sideways. */}
+    <div class="rotate-notice" aria-hidden="true">
+      <span class="rotate-notice__logo"><Logo /></span>
+      <p class="rotate-notice__text">Turn your phone upright</p>
     </div>
     <header class="site-header" transition:persist="site-header" transition:animate="none">
       <a class="site-header__logo" href="/">

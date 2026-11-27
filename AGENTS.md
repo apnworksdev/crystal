@@ -136,6 +136,7 @@ web/src/styles/
 | `product-strip` | product page. A row on desktop, a column on phone; the merch pile behind fades away as it opens | `__stage`, `__pile`, `__ghost`, `__track`, `__card`, `__run` |
 | `about-panel`, `team`, `team-member` | About panel in the header. There is no /about route | `about-panel__head`, `__title`, `__tabs`, `__tab`, `__close`, `__text`, `__team-link`, `__contact`, `__footer` (phone only), `team__list`, `team-member__name`, `__image`, `__card`, `__position`, `__description`, `__track`, `__track-label` |
 | `mirror` | Hidden /mirror page, opened by three quick clicks on the header logo. No header, footer or router | `__canvas`, `__video`, `__logo`, `__bar`, `__enter`, `__toggle`, `__slash`, `__close` |
+| `rotate-notice` | Base layout. Covers every page but the project player on a phone held sideways (`rotate-notice.css`); portrait and desktop never see it | `__logo`, `__text` |
 | `page-title`, `empty-message`, `rich-text` | Shared | none |
 
 - **Stylesheet names that differ from their component:** `AboutPanel.astro` → `about.css`, `NewsPanel.astro` →

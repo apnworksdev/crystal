@@ -1,0 +1,43 @@
+/* A phone held sideways gets the phone layout, which is built for a tall screen, so every
+   page but the project player shows this instead. Portrait phones and desktop never match
+   the query below, so nothing changes for them. Added by Claude: restyle freely. */
+
+.rotate-notice {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 30rem) and (pointer: coarse) {
+  body:not([data-page='project']) .rotate-notice {
+    position: fixed;
+    z-index: 2147483000;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap);
+    background: var(--foreground-color);
+    color: var(--background-color);
+    text-align: center;
+  }
+
+  /* The page underneath keeps its place but cannot be scrolled or tapped meanwhile. */
+  body:not([data-page='project']):has(.rotate-notice) {
+    overflow: hidden;
+  }
+
+  .rotate-notice__logo {
+    display: block;
+    width: min(40vw, 12rem);
+  }
+
+  .rotate-notice__logo svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .rotate-notice__text {
+    margin: 0;
+  }
+}
