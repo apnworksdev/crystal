@@ -252,18 +252,42 @@ function whenViewTransitionsDone() {
   return Promise.all(animations.map((animation) => animation.finished.catch(() => {})));
 }
 
-function leaveProject() {
-  const inside = arrival && arrival !== location.pathname && history.length > 1;
-  arrival = '';
-  if (inside) {
-    history.back();
-    return;
-  }
+// How long history.back() may take to start a page change before closing goes there directly.
+const BACK_GRACE_MS = 700;
+
+function goTo(path) {
   if (document.querySelector('[name="astro-view-transitions-enabled"]')) {
-    navigate('/work');
+    navigate(path);
     return;
   }
-  location.assign('/work');
+  location.assign(path);
+}
+
+function leaveProject() {
+  const target = arrival && arrival !== location.pathname ? arrival : '';
+  arrival = '';
+  if (!target || history.length < 2) {
+    goTo('/work');
+    return;
+  }
+  // The player is already gone, so the screen is black until the page changes. history.back()
+  // can do nothing visible: on an iPhone the entry before can belong to the removed video
+  // frame. If no page change has started soon, go to the page directly instead.
+  const here = location.href;
+  let moved = false;
+  const onMove = () => {
+    moved = true;
+  };
+  const events = ['popstate', 'pagehide'];
+  document.addEventListener('astro:before-preparation', onMove, { once: true });
+  events.forEach((type) => window.addEventListener(type, onMove, { once: true }));
+  history.back();
+  window.setTimeout(() => {
+    document.removeEventListener('astro:before-preparation', onMove);
+    events.forEach((type) => window.removeEventListener(type, onMove));
+    if (moved || location.href !== here) return;
+    goTo(target);
+  }, BACK_GRACE_MS);
 }
 
 let shownPlaying = null;
@@ -646,9 +670,13 @@ export function setUpProject() {
     { signal },
   );
 
+  let leaving = false;
   player?.querySelector('[data-player-close]')?.addEventListener(
     'click',
     () => {
+      // A second tap while leaving would start a second page change, to /work.
+      if (leaving) return;
+      leaving = true;
       const parts = location.pathname.split('/').filter(Boolean);
       const slug = parts[0] === 'projects' ? decodeURIComponent(parts[1] || '') : '';
       const routed = Boolean(document.querySelector('[name="astro-view-transitions-enabled"]'));

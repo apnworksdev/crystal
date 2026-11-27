@@ -110,11 +110,24 @@ body[data-player-idle] .project__cursor {
    On an iPhone the home-indicator inset is padding inside the bubbles, so their colour still
    reaches the edge. */
 body[data-page='project'] {
-  --player-safe: env(safe-area-inset-bottom, 0px);
+  --player-inset: env(safe-area-inset-bottom, 0px);
+  --player-safe: var(--player-inset);
+  --player-lift: 0px;
+}
+
+/* Turned sideways, an iPhone reports the home-indicator inset even without a bottom toolbar
+   (about 21px), and as padding it made every bubble almost twice as tall, thicker below its
+   content. Lying down, the bar keeps its own height and stays flush on the bottom edge, as
+   everywhere else (set --player-lift to var(--player-inset) to lift it clear instead). */
+@media (orientation: landscape) {
+  body[data-page='project'] {
+    --player-safe: 0px;
+    --player-lift: 0px;
+  }
 }
 
 :root body[data-page='project'] .site-header {
-  bottom: 0;
+  bottom: var(--player-lift);
   height: calc(var(--height-bubble) + var(--player-safe));
 }
 
@@ -134,16 +147,17 @@ body[data-page='project'] {
   padding-bottom: var(--player-safe);
 }
 
-/* The open description keeps the page margin above it, now that the bar has none below. */
+/* The open description: half the screen, from the bottom edge (as in the design). */
 :root body[data-page='project'] .site-header__name[data-open] {
-  height: calc(100dvh - var(--margin));
+  height: 50dvh;
   /* Open, the name has no background of its own (header.css): the home-indicator inset
      goes inside the details block, so its colour still reaches the edge. */
   padding-bottom: 0;
 }
 
 :root body[data-page='project'] .site-header__name[data-open] .site-header__info {
-  padding-bottom: calc(var(--gap) + var(--player-safe));
+  /* The credits end level with the top of the bar, as in the design. */
+  padding-bottom: calc(var(--height-bubble) + var(--small-gap) + var(--player-safe));
 }
 
 /* The open description keeps the same gap to the controls as the closed title. */

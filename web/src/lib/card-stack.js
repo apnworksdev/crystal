@@ -113,3 +113,45 @@ export function openPileStyle(style, progress) {
     opacity: style.opacity * (1 - OPEN_FADE * open),
   };
 }
+
+// Thrown by hand (a product's pictures): letting go of a drag hands its speed to a spring
+// that carries on at that speed and settles on a picture, so nothing jumps when the finger lifts.
+
+/**
+ * One step of a critically damped spring pulling `offset` (from where it rests) to 0 at
+ * `omega` per millisecond, `elapsed` milliseconds long. Exact for any step, so a slow frame
+ * never overshoots. Returns the new offset and velocity (per millisecond).
+ */
+export function spring(offset, velocity, omega, elapsed) {
+  if (!(elapsed > 0)) return { offset, velocity };
+  const decay = Math.exp(-omega * elapsed);
+  const lead = velocity + omega * offset;
+  return {
+    offset: (offset + lead * elapsed) * decay,
+    velocity: (velocity - omega * lead * elapsed) * decay,
+  };
+}
+
+/**
+ * Where a throw lands and how stiff the spring that carries it is. `position` and `velocity`
+ * (per millisecond) are in pictures; the throw would coast `coastMs` times its speed, and it
+ * lands on the nearest whole picture to that, at most `maxLead` pictures away. `omega` is the
+ * spring's usual stiffness. A real throw gets a softer spring that leaves at the finger's
+ * speed, only slows from there and never runs past the picture.
+ */
+export function throwTo(position, velocity, coastMs, omega, maxLead = Infinity) {
+  let target = Math.round(position + velocity * coastMs);
+  target = Math.max(Math.round(position) - maxLead, Math.min(Math.round(position) + maxLead, target));
+  let distance = target - position;
+  if (!velocity || velocity * distance <= 0 || !distance) return { target, omega };
+  // Leaving at this speed, a spring of stiffness w runs past the picture unless the distance is at
+  // least speed / w, and speeds up first unless it is at most 2 × speed / w: the middle is 1.5.
+  let stiffness = Math.min(omega, Math.max(omega / 4, (1.5 * velocity) / distance));
+  if (Math.abs(velocity) / stiffness > Math.abs(distance) && Math.abs(target - Math.round(position)) < maxLead) {
+    // Too fast to stop in time: the next picture on.
+    target += Math.sign(velocity);
+    distance = target - position;
+    stiffness = Math.min(omega, Math.max(omega / 4, (1.5 * velocity) / distance));
+  }
+  return { target, omega: stiffness };
+}

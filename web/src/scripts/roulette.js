@@ -3,6 +3,7 @@
 // wider picture shrinks further so it stays smaller than the centre.
 
 import EmblaCarousel from 'embla-carousel';
+import { leaveSlug } from './cover.js';
 import { closeNav, setHeaderProject } from './header.js';
 
 // Embla's duration is a physics constant, not milliseconds: lower is quicker.
@@ -465,9 +466,16 @@ export function setUpRoulette() {
   if (!viewport) return;
 
   fillRow(viewport);
+  // Back from a project: that project is in front, so the black can shrink onto it
+  // (cover.js), instead of the row starting over at the first one.
+  const back = leaveSlug();
+  const backIndex = back
+    ? [...viewport.querySelectorAll('.project-roulette__slide')].findIndex((slide) => slide.dataset.slug === back)
+    : -1;
   embla = EmblaCarousel(
     viewport,
     {
+      startIndex: Math.max(0, backIndex),
       loop: true,
       align: 'center',
       containScroll: false,

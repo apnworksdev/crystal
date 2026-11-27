@@ -625,7 +625,8 @@ body[data-page='project'] .site-header__name[data-open] {
   bottom: 0;
   width: var(--player-info-width);
   max-width: var(--player-info-width);
-  height: calc(100dvh - var(--margin) * 2);
+  /* Half the screen, from the bottom edge (as in the design). */
+  height: 50dvh;
 }
 
 body[data-page='project'] .site-header__name-head {
@@ -675,17 +676,34 @@ body[data-page='project'] .site-header__info-close[hidden] {
   display: none;
 }
 
+/* Credits sit at the bottom of the panel in two columns: the roles, then the names lined
+   up after the longest role (as in the design). */
 body[data-page='project'] .site-header__info .project__credits {
-  margin-top: auto;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--margin);
+  margin: auto 0 0;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-mono);
   font-weight: var(--font-weight-mono);
   line-height: var(--line-height-mono);
 }
 
-body[data-page='project'] .site-header__info .project__description p + p,
-body[data-page='project'] .site-header__info .project__credits p + p {
-  margin-top: var(--small-gap);
+body[data-page='project'] .site-header__info .project__credit {
+  display: contents;
+}
+
+body[data-page='project'] .site-header__info :is(.project__credit-label, .project__credit-value) {
+  margin: 0;
+}
+
+/* A name with no role starts in the names column. */
+body[data-page='project'] .site-header__info .project__credit-label:empty {
+  grid-column: 1;
+}
+
+body[data-page='project'] .site-header__info .project__description p + p {
+  margin-top: 1em;
 }
 
 body[data-page='project'] .site-header__slot {
@@ -964,6 +982,7 @@ body[data-page='archive'] .site-header[data-about] .site-header__columns {
     max-width: none;
     margin-left: calc((var(--height-bubble) - var(--logo-c, 12.71px)) / 2);
     clip-path: inset(0 calc(100% - var(--logo-c, 12.71px)) 0 0);
+    left: 0.5px;
   }
 
   .site-header .site-header__nav,

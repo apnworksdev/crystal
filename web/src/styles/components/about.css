@@ -104,6 +104,12 @@
   outline-color: var(--foreground-color);
 }
 
+/* A text field is :focus-visible the whole time it is typed in, so the ring showed as a
+   white box around Get in touch. The ruled lines already mark the field. */
+.about-panel :is(textarea, input):focus-visible {
+  outline: none;
+}
+
 .site-header[data-about] .site-header__context,
 .site-header[data-about] .site-header__views {
   display: none;
@@ -267,6 +273,7 @@
   flex: none;
   justify-content: flex-start;
   height: var(--height-bubble);
+  padding-top: var(--margin);
 }
 
 .about-panel__team {
@@ -538,12 +545,19 @@ main,
     margin-top: auto;
   }
 
+  /* The auto margin above is all the space there is left, so with a long text it came to
+     nothing and Meet our team touched Get in touch. Whatever sits above keeps a gap. */
+  .about-panel__body > :has(+ .about-panel__contact) {
+    margin-bottom: var(--big-gap);
+  }
+
   /* The footer sits under the contact form, so the whole body scrolls instead of the text
      alone. */
   .about-panel__body {
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
+    padding-top: var(--gap);
   }
 
   .about-panel__text {
@@ -559,7 +573,7 @@ main,
     margin-top: var(--big-gap);
     /* The same space under it as above the About text. On the footer, not the scrolling
        body: Safari leaves out a scroller's bottom padding. */
-    padding-bottom: var(--margin);
+    padding-bottom: var(--gap);
   }
 
   .about-panel__body:has(.about-panel__footer) {

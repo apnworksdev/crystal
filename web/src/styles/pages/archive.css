@@ -114,6 +114,10 @@ body[data-page='archive'] .site-footer {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* The overflow that cuts a long name also cut the descenders (g, p) on the tight mono
+     line. Room for them, taken back from the layout so the rows do not move. */
+  padding-block: 0.15em;
+  margin-block: -0.15em;
 }
 
 .archive__time {

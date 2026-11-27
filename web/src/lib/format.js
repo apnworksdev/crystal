@@ -17,3 +17,19 @@ export function formatPrice(value) {
   const text = String(value ?? '').trim();
   return /^\d/.test(text) ? `$${text}` : text;
 }
+
+/**
+ * Credits are written one per line in the Studio, as "Role: Name". Each becomes a row of two
+ * columns, split at the first colon. A line without one is a name with no role.
+ */
+export function creditRows(blocks) {
+  return (blocks ?? [])
+    .map((block) => (block?.children ?? []).map((child) => child?.text ?? '').join(''))
+    .map((text) => {
+      const at = text.indexOf(':');
+      return at > 0
+        ? { label: text.slice(0, at).trim(), value: text.slice(at + 1).trim() }
+        : { label: '', value: text.trim() };
+    })
+    .filter((row) => row.label || row.value);
+}

@@ -152,7 +152,7 @@ web/src/styles/
 
 | Type | Kind | Notes |
 |---|---|---|
-| `project` | Documents | `showInWork` and `showInArchive` switches. A project can be on both, one or neither |
+| `project` | Documents | `showInWork` and `showInArchive` switches. A project can be on both, one or neither. `credits` is one line per credit, "Role: Name", shown in two columns (`creditRows` in `lib/format.js`) |
 | `homePage` | Single document | Ordered references to projects |
 | `award` | Documents | `ceremony`, `category`, `work`, `year`, `image` |
 | `product` | Documents | `title`, `price` (a string with currency), `url`, `images` |

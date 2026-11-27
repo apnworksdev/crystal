@@ -150,6 +150,11 @@ body[data-work-view='list'] .work-list[hidden] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Behaviour: the line (110%) is shorter than the letters, and the overflow that cuts a long
+     title also cut the tails of g, p and y. Room above and below, given back by the margin,
+     so the row keeps its height. */
+  padding-block: 0.15em 0.3em;
+  margin-block: -0.15em -0.3em;
 }
 
 .work-list__empty {

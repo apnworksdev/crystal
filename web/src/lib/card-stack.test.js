@@ -9,6 +9,8 @@ import {
   follow,
   loopOffset,
   openPileStyle,
+  spring,
+  throwTo,
 } from './card-stack.js';
 
 test('the card at the position is in front, the next ones behind it', () => {
@@ -130,4 +132,39 @@ test('the pile disappears completely, and evenly over the opening, not all at th
   assert.ok(openPileStyle(style, 0.1).opacity > style.opacity * 0.9);
   const half = openPileStyle(style, 0.5).opacity / style.opacity;
   assert.ok(half > 0.4 && half < 0.6);
+});
+
+test('the spring settles exactly where it rests and keeps its speed at the start', () => {
+  let state = { offset: -1, velocity: 0.005 };
+  const first = spring(state.offset, state.velocity, 0.02, 1);
+  assert.ok(Math.abs(first.velocity - 0.005) < 0.001);
+  for (let i = 0; i < 120; i++) state = spring(state.offset, state.velocity, 0.02, 1000 / 60);
+  assert.ok(Math.abs(state.offset) < 1e-4);
+  assert.ok(Math.abs(state.velocity) < 1e-5);
+});
+
+test('a long frame does not make the spring overshoot', () => {
+  const { offset } = spring(-1, 0, 0.02, 500);
+  assert.ok(offset <= 0 && offset > -0.01);
+});
+
+test('a throw lands on the whole picture it would coast to', () => {
+  assert.equal(throwTo(0.2, 0.004, 200, 0.018).target, 1);
+  assert.equal(throwTo(0.2, -0.004, 200, 0.018).target, -1);
+  assert.equal(throwTo(0.3, 0, 200, 0.018).target, 0);
+  assert.equal(throwTo(0, 0.05, 200, 0.018, 2).target, 2);
+});
+
+test('a throw only slows down and never runs past its picture', () => {
+  for (const [position, velocity] of [[0.2, 0.004], [0.1, 0.01], [0.45, 0.003], [-0.3, -0.006]]) {
+    const { target, omega } = throwTo(position, velocity, 200, 0.018);
+    let state = { offset: position - target, velocity };
+    let last = Math.abs(velocity);
+    for (let i = 0; i < 200; i++) {
+      state = spring(state.offset, state.velocity, omega, 1000 / 60);
+      assert.ok(Math.sign(state.offset) !== Math.sign(velocity) || Math.abs(state.offset) < 1e-9, 'past the picture');
+      assert.ok(Math.abs(state.velocity) <= last + 1e-9, 'sped up');
+      last = Math.abs(state.velocity);
+    }
+  }
 });

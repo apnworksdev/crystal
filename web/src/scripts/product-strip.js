@@ -6,12 +6,14 @@
 // The page does not scroll. Input only moves a target: the wheel or a trackpad, a drag
 // (finger or mouse), the arrow keys, a click on a neighbour. One frame loop eases the
 // pictures toward it, and a moment after the input stops the target rounds to a picture.
+// A drag is the exception: the pictures stay under the finger, and letting go hands the
+// finger's speed to a spring that carries on and settles on a picture (throwTo).
 //
 // Opened from the merch pile (handoff.js), the middle picture is already where the front
 // product was. The others slide in from beyond the edges while the pile melts away behind.
 // Going back to Merch plays it in reverse, and the pile is in place for the merch page.
 
-import { follow, loopOffset, openPileStyle } from '../lib/card-stack.js';
+import { follow, loopOffset, openPileStyle, spring, throwTo } from '../lib/card-stack.js';
 import { checkHandoff, handOff, handoffLeave, takeHandoff } from './handoff.js';
 import { closeNav } from './header.js';
 
@@ -24,9 +26,13 @@ const WHEEL_STEP = 400;
 const SNAP_MS = 160;
 // A press only counts as a drag past this distance; shorter, it stays a click.
 const TAP_SLOP = 8;
-// After a drag the strip keeps going and slows down: the speed left after each 60th of a second.
+// After a drag the strip keeps going as if it slowed down by this much each 60th of a second
+// (the reference's), then lands on the nearest picture to where that would stop.
 const FLING_DECAY = 0.92;
 const FRAME_MS = 1000 / 60;
+const COAST_MS = FRAME_MS / (1 - FLING_DECAY);
+// The finger's speed is measured over its last this many milliseconds.
+const SPEED_WINDOW = 100;
 // The target never runs further ahead than this, in pictures: a burst of fast scrolling
 // keeps the movement going at a pace the eye can follow, instead of spinning through.
 const MAX_LEAD = 2;
@@ -58,13 +64,18 @@ let frame = 0;
 let lastFrame = 0;
 let snapTimer = 0;
 let drag = null;
-let fling = null;
+// After a throw: the spring's stiffness (0 when not thrown) and the speed, in pictures per ms.
+let thrown = 0;
+let velocity = 0;
 let suppressClick = false;
 let leaving = false;
 // Leaving for Merch: called once the pictures have landed where the pile takes over.
 let landed = null;
 let duration = 500;
 const easeOut = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
+
+/** The spring that settles a throw: about as long as the shared expo-out to come to rest. */
+const springOmega = () => 9.2 / duration;
 
 /** --grow-duration in milliseconds: the shared expo-out. */
 function motionMs() {
@@ -89,11 +100,14 @@ function draw() {
   // A card swaps sides at the far end of the loop: hidden just before. There are always
   // enough (MIN_CARDS) for that to happen well off screen.
   const reach = total / 2 - 0.05;
+  // Sizes first, then styles: reading a size after a style change forces the page to restyle,
+  // once per card.
+  const sizes = cards.map((card) => (column ? card.offsetHeight : card.offsetWidth));
   cards.forEach((card, k) => {
     const s = loopOffset(k, shown, total);
     const middle = Math.abs(s) < 0.5;
     const offset = Math.round(s * gap);
-    const size = column ? card.offsetHeight : card.offsetWidth;
+    const size = sizes[k];
     // Drawn until a whole picture past the edge: the stage's height can differ from what a
     // phone shows (Safari's bars), and a picture must never vanish while still in view.
     const onScreen = Math.abs(offset) - size / 2 < screen / 2 + size;
@@ -122,17 +136,20 @@ function tick(now) {
   const elapsed = Math.min(64, Math.max(0, now - lastFrame));
   lastFrame = now;
 
-  if (fling) {
-    target += (fling.speed * elapsed) / pitch();
-    fling.speed *= FLING_DECAY ** (elapsed / FRAME_MS);
-    if (Math.abs(fling.speed) * FRAME_MS < 0.5) {
-      fling = null;
-      snapSoon();
+  if (thrown) {
+    const step = spring(shown - target, velocity, thrown, elapsed);
+    shown = target + step.offset;
+    velocity = step.velocity;
+    const size = pitch();
+    if (Math.abs(step.offset) * size < 0.25 && Math.abs(step.velocity) * size * FRAME_MS < 0.25) {
+      shown = target;
+      velocity = 0;
+      thrown = 0;
     }
+  } else if (!drag?.moved) {
+    shown = reducedMotion.matches ? target : follow(shown, target, elapsed, duration);
+    if (Math.abs(target - shown) < 0.001) shown = target;
   }
-
-  shown = reducedMotion.matches ? target : follow(shown, target, elapsed, duration);
-  if (Math.abs(target - shown) < 0.001) shown = target;
 
   if (open !== openTo) {
     const t = reducedMotion.matches ? 1 : (now - openStart) / duration;
@@ -145,7 +162,7 @@ function tick(now) {
     landed();
     landed = null;
   }
-  if (shown !== target || fling || open !== openTo) frame = requestAnimationFrame(tick);
+  if (shown !== target || thrown || open !== openTo) frame = requestAnimationFrame(tick);
 }
 
 function wake() {
@@ -157,7 +174,7 @@ function wake() {
 function snapSoon() {
   window.clearTimeout(snapTimer);
   snapTimer = window.setTimeout(() => {
-    if (drag || fling) return;
+    if (drag || thrown) return;
     target = Math.round(target);
     wake();
   }, SNAP_MS);
@@ -176,6 +193,8 @@ function animateOpen(value) {
 function nudge(pictures) {
   if (leaving || total <= 1) return;
   closeNav();
+  thrown = 0;
+  velocity = 0;
   target = Math.max(shown - MAX_LEAD, Math.min(shown + MAX_LEAD, target + pictures));
   wake();
 }
@@ -187,16 +206,15 @@ function onWheel(event) {
   const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
   if (!delta) return;
   const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? root.clientHeight : 1;
-  fling = null;
   nudge((delta * unit) / (vertical() ? pitch() : WHEEL_STEP));
   snapSoon();
 }
 
 // A drag, by finger or mouse: the pictures follow it, up or sideways, whichever way it
-// mostly goes. Letting go keeps them going until they slow down and settle.
+// mostly goes, staying exactly under it. Letting go keeps them going at the same speed until
+// they slow down and settle on a picture.
 function onPointerDown(event) {
   if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
-  fling = null;
   suppressClick = false;
   if (event.pointerType === 'mouse') event.preventDefault();
   drag = {
@@ -205,14 +223,14 @@ function onPointerDown(event) {
     y: event.clientY,
     lastX: event.clientX,
     lastY: event.clientY,
-    lastT: event.timeStamp,
-    speed: 0,
     moved: false,
+    // Recent positions and times, for the speed when the finger lifts.
+    samples: [],
   };
 }
 
 function onPointerMove(event) {
-  if (!drag || event.pointerId !== drag.id) return;
+  if (!drag || event.pointerId !== drag.id || leaving) return;
   if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < TAP_SLOP) return;
   if (!drag.moved) {
     // A mouse drag keeps going past the strip's edge.
@@ -221,35 +239,57 @@ function onPointerMove(event) {
     } catch {
       // The pointer is already gone.
     }
+    // Caught: whatever was moving stops where it is, under the finger.
+    closeNav();
+    window.clearTimeout(snapTimer);
+    thrown = 0;
+    velocity = 0;
   }
   drag.moved = true;
   const dx = drag.lastX - event.clientX;
   const dy = drag.lastY - event.clientY;
   const travel = Math.abs(dx) > Math.abs(dy) ? dx : dy;
-  const dt = Math.max(8, event.timeStamp - drag.lastT);
-  drag.speed = travel / dt;
   drag.lastX = event.clientX;
   drag.lastY = event.clientY;
-  drag.lastT = event.timeStamp;
-  nudge(travel / pitch());
+  // One to one: the pictures move exactly as far as the finger.
+  shown += travel / pitch();
+  target = shown;
+  const { samples } = drag;
+  samples.push({ t: event.timeStamp, p: shown });
+  while (samples.length > 2 && event.timeStamp - samples[0].t > SPEED_WINDOW) samples.shift();
+  wake();
+}
+
+/** The drag's speed over its last moments, in pictures per millisecond. */
+function releaseSpeed(samples, now) {
+  const last = samples[samples.length - 1];
+  if (!last || now - last.t > SPEED_WINDOW) return 0;
+  const first = samples.find((sample) => last.t - sample.t <= SPEED_WINDOW) ?? last;
+  const dt = last.t - first.t;
+  return dt > 0 ? (last.p - first.p) / dt : 0;
 }
 
 function onPointerUp(event) {
   if (!drag || event.pointerId !== drag.id) return;
-  const { moved, speed, lastT } = drag;
+  const { moved, samples } = drag;
   drag = null;
   if (!moved) return;
   suppressClick = true;
   window.setTimeout(() => (suppressClick = false), 50);
-  const stale = event.timeStamp - lastT > 100;
-  const throwSpeed = !stale && event.type !== 'pointercancel' && !reducedMotion.matches ? speed : 0;
-  // Where the throw would coast to (per frame it keeps FLING_DECAY of its speed), rounded to
-  // a picture at once: one ease lands it centred. Coasting first stopped off centre and the
-  // snap pulled it in afterwards.
-  const carry = (throwSpeed * FRAME_MS) / (1 - FLING_DECAY) / pitch();
-  fling = null;
   window.clearTimeout(snapTimer);
-  target = Math.round(Math.max(shown - MAX_LEAD, Math.min(shown + MAX_LEAD, target + carry)));
+  if (leaving) return;
+  if (reducedMotion.matches) {
+    target = Math.round(shown);
+    wake();
+    return;
+  }
+  // The spring leaves at the finger's speed and lands on the picture the throw would coast
+  // to, so the movement carries on from the drag without a jump and ends centred.
+  const speed = event.type === 'pointercancel' ? 0 : releaseSpeed(samples, event.timeStamp);
+  const landing = throwTo(shown, speed, COAST_MS, springOmega(), MAX_LEAD);
+  target = landing.target;
+  velocity = speed;
+  thrown = landing.omega;
   wake();
 }
 
@@ -264,7 +304,6 @@ function onClick(event) {
   if (!card || leaving) return;
   const s = Math.round(loopOffset(cards.indexOf(card), Math.round(target), total));
   if (!s) return;
-  fling = null;
   window.clearTimeout(snapTimer);
   nudge(Math.round(target) + s - target);
 }
@@ -281,7 +320,6 @@ function onKeyDown(event) {
   const up = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
   if (!down && !up) return;
   event.preventDefault();
-  fling = null;
   window.clearTimeout(snapTimer);
   nudge(Math.round(target) + (down ? 1 : -1) - target);
 }
@@ -303,7 +341,8 @@ function leaveTo(pathname, from = location.pathname) {
   if (trim(pathname) !== '/merch' || !total) return;
   leaving = true;
   drag = null;
-  fling = null;
+  thrown = 0;
+  velocity = 0;
   window.clearTimeout(snapTimer);
   // The nearest whole picture: where it already is, or just about.
   target = Math.round(target);
@@ -362,7 +401,8 @@ export function setUpProductStrip() {
   frame = 0;
   window.clearTimeout(snapTimer);
   drag = null;
-  fling = null;
+  thrown = 0;
+  velocity = 0;
   leaving = false;
   landed = null;
 

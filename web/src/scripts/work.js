@@ -5,7 +5,7 @@
 // goes back towards the middle by whole sets of rows, which looks exactly the same. Only
 // the rows scroll; the still and the column bar above them stay put.
 
-import { closeNav } from './header.js';
+import { closeNav, glideFrom, headerGlideMs, settleHeaderPlace } from './header.js';
 
 const VIEW_KEY = 'work-view';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -419,6 +419,9 @@ function setView(view) {
 // Switching between the stack and the list: the page content fades out, changes, and
 // fades back in on the same curve as a page change (page.js).
 let switching = null;
+// The new view fades in as a page does (page.js).
+const FADE_IN_MS = 700;
+const FADE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 function switchView(view) {
   const content = document.querySelector('main');
@@ -435,20 +438,23 @@ function switchView(view) {
   });
   Promise.race([out.finished.catch(() => {}), new Promise((resolve) => window.setTimeout(resolve, 240))]).then(() => {
     if (switching !== generation || !content.isConnected) return;
-    // Phone: the list docks the header at the top and the stack at the bottom. It glides there.
+    // Phone: the list docks the header at the top and the stack at the bottom. It glides
+    // there, and the new view comes with it from where the header was, as one block: the
+    // list hangs under the header and rises with it, the stack comes down with it.
     const header = document.querySelector('.site-header');
     const before = header?.getBoundingClientRect().top;
     setView(view);
     window.scrollTo(0, 0);
     out.cancel();
+    settleHeaderPlace(header);
     const after = header?.getBoundingClientRect().top;
+    const ms = headerGlideMs(header);
     if (header && Math.abs(before - after) > 1) {
-      header.animate([{ translate: `0 ${before - after}px` }, { translate: '0 0' }], {
-        duration: 500,
-        easing: 'cubic-bezier(0.19, 1, 0.22, 1)',
-      });
+      glideFrom(header, 0, before - after, ms);
+      glideFrom(content, 0, before - after, ms);
     }
-    content.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 600, easing: 'cubic-bezier(0.19, 1, 0.22, 1)' });
+    // On an even curve: on the expo-out the view was most of the way in on its first frame.
+    content.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_IN_MS, easing: FADE_EASING });
     switching = null;
   });
 }

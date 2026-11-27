@@ -2,7 +2,7 @@
 import { stegaClean } from '@sanity/client/stega';
 import Base from '../../layouts/Base.astro';
 import { getPageProjects } from '../../lib/content.js';
-import { richTextToHtml } from '../../lib/format.js';
+import { creditRows, richTextToHtml } from '../../lib/format.js';
 import '../../styles/pages/project.css';
 
 export async function getStaticPaths() {
@@ -14,8 +14,9 @@ const project = (await getPageProjects()).find(({ slug }) => slug === Astro.para
 if (!project) return Astro.rewrite('/404');
 
 const description = richTextToHtml(project.description);
-const credits = richTextToHtml(project.credits);
-const hasInfo = Boolean(description || credits);
+// "Role: Name" lines, shown as two columns (lib/format.js).
+const credits = creditRows(project.credits);
+const hasInfo = Boolean(description || credits.length);
 const media = project.mainMedia;
 const kind = media?.kind === 'video' || media?.kind === 'image' ? media.kind : 'empty';
 const poster = kind === 'image' ? media : media?.poster;
@@ -95,7 +96,16 @@ const poster = kind === 'image' ? media : media?.poster;
       hasInfo && (
         <div class="project__info-source" data-project-info hidden>
           {description && <div class="project__description rich-text" set:html={description} />}
-          {credits && <div class="project__credits rich-text" set:html={credits} />}
+          {credits.length > 0 && (
+            <dl class="project__credits">
+              {credits.map(({ label, value }) => (
+                <div class="project__credit">
+                  <dt class="project__credit-label">{label}</dt>
+                  <dd class="project__credit-value">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </div>
       )
     }

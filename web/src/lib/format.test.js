@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatPrice } from './format.js';
+import { creditRows, formatPrice } from './format.js';
 
 test('a bare number gets a dollar sign', () => {
   assert.equal(formatPrice('15'), '$15');
@@ -16,4 +16,19 @@ test('a price with its own currency stays as written', () => {
 test('no price stays empty', () => {
   assert.equal(formatPrice(undefined), '');
   assert.equal(formatPrice(''), '');
+});
+
+test('credits split into a role and a name at the first colon', () => {
+  const block = (text) => ({ _type: 'block', children: [{ _type: 'span', text }] });
+  assert.deepEqual(
+    creditRows([block('Director: Phil Lord & Christopher Miller'), block('Edited by:Joel Negron'), block('Crystal'), block('  ')]),
+    [
+      { label: 'Director', value: 'Phil Lord & Christopher Miller' },
+      { label: 'Edited by', value: 'Joel Negron' },
+      { label: '', value: 'Crystal' },
+    ],
+  );
+  // A colon later in the name stays in the name.
+  assert.deepEqual(creditRows([block('Mix: Studio: B')]), [{ label: 'Mix', value: 'Studio: B' }]);
+  assert.deepEqual(creditRows(undefined), []);
 });

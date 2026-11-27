@@ -841,12 +841,86 @@ function rowPlaces(header) {
   return places;
 }
 
+/* ---------- The header changing place ----------
+
+   On a phone the header sits in a different place on each page: docked at the bottom on
+   Home, Merch and the Work stack, at the top on the Work list, in the middle elsewhere. The
+   distance can be most of the screen, so on the opening curve at its usual length it covered
+   80px or more in a frame and read as a drop. It glides on the same expo-out over twice the
+   grow duration, which halves the first frames' speed; most of the way is still covered in
+   the first third. */
+
+/** How long the header and whatever moves with it take to change place. */
+export function headerGlideMs(header = document.querySelector('.site-header')) {
+  const grow = header ? parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) : NaN;
+  return (Number.isFinite(grow) ? grow * 1000 : 500) * 2;
+}
+
+/** The docked header eases `top` as the footer pushes it (footer.css). A page or view change
+ *  starts that transition too, which made the header drop on its own: end it, so the header
+ *  is measured at its new place and only the glide moves it. */
+export function settleHeaderPlace(header = document.querySelector('.site-header')) {
+  header?.getAnimations().forEach((animation) => {
+    if (animation.transitionProperty === 'top') animation.finish();
+  });
+}
+
+/** Slides `element` from `dx`, `dy` pixels away to where it is now. */
+export function glideFrom(element, dx, dy, ms = headerGlideMs()) {
+  if (!element || reducedMotion.matches || (Math.abs(dx) < 1 && Math.abs(dy) < 1)) return null;
+  // Added to the header's own translate (header-scroll.js), not instead of it.
+  return element.animate([{ translate: `${dx}px ${dy}px` }, { translate: '0px 0px' }], {
+    duration: ms,
+    easing: EXPO_OUT,
+    composite: 'add',
+  });
+}
+
+// Where the header box was before a section change. Project pages move it themselves
+// (project.js), behind the black cover.
+let headerBefore = null;
+
+/** After a swap between two pages that are not project pages, the header glides to its new place. */
+function glideHeaderToPlace(header) {
+  const from = headerBefore;
+  headerBefore = null;
+  if (!from || document.body.dataset.page === 'project') return;
+  // A full page load holds the header with its own transform (Base.astro); leave that one be.
+  if (header.dataset.flipToTop) return;
+  // Take the move over from project.js, so the header is not slid twice.
+  delete header.dataset.flipTop;
+  delete header.dataset.flipLeft;
+  delete header.dataset.flipWidth;
+  try {
+    sessionStorage.removeItem('crystal-header-from');
+  } catch {
+    // Nothing to take over, then.
+  }
+  // The Work page sets its view later (work.js). Set it now, as Base.astro does on a full
+  // load, so the header is measured at the place the view docks it.
+  if (document.querySelector('[data-work-list]')) {
+    let stored = '';
+    try {
+      stored = sessionStorage.getItem('work-view') || '';
+    } catch {
+      // The stack, then.
+    }
+    if (stored === 'list') document.body.dataset.workView = 'list';
+  }
+  settleHeaderPlace(header);
+  const to = header.getBoundingClientRect();
+  glideFrom(header, from.left - to.left, from.top - to.top, headerGlideMs(header));
+}
+
 /** Runs just before a page swap: where each piece sits in the header row. */
 export function rememberHeaderRow() {
   rowBefore = null;
+  headerBefore = null;
   const header = document.querySelector('.site-header');
   if (!header || reducedMotion.matches || document.body.dataset.page === 'project') return;
   rowBefore = rowPlaces(header);
+  const box = header.getBoundingClientRect();
+  headerBefore = { top: box.top, left: box.left };
 }
 
 /** After the swap, pieces the new page moved slide there instead of jumping. */
@@ -899,6 +973,7 @@ export function setUpHeader() {
   }
   header.classList.remove('is-views-out');
   slideHeaderRow(header);
+  glideHeaderToPlace(header);
 
   if (document.body.dataset.page === 'project') dismissAbout();
 
