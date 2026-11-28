@@ -46,6 +46,22 @@
   height: auto;
 }
 
+/* Behaviour: the wordmark canvas (logo-motion.js) takes over from the SVG once its script
+   runs. The word fills its width; the extra height leaves room for the T. Added by Claude. */
+.mirror__wordmark {
+  display: none;
+  width: min(70vw, 1600px);
+  height: calc(min(70vw, 1600px) * 0.2);
+}
+
+.mirror__logo[data-wordmark-ready] .mirror__wordmark {
+  display: block;
+}
+
+.mirror__logo[data-wordmark-ready] svg {
+  display: none;
+}
+
 .mirror__bar {
   position: absolute;
   left: 50%;
@@ -116,8 +132,8 @@
 }
 
 .mirror__close svg {
-  width: 11px;
-  height: 11px;
+  width: 24px;
+  height: 24px;
 }
 
 /* While the browser asks for access. Close stays usable. */

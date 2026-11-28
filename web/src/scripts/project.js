@@ -1,19 +1,30 @@
 // The project page is a player. The site header slides down and becomes its bar.
 
+import { formatTimecode } from '../lib/format.js';
+import { containBox } from '../lib/fit.js';
 import { prefetch } from 'astro:prefetch';
 import { navigate } from 'astro:transitions/client';
 import { leaveCoverShrink, markLeave, takeEnterCover } from './cover.js';
 import { closeNav } from './header.js';
 import { headerFlip } from './header-flip.js';
 import { whenIntroDone } from './intro.js';
-import { startLogoMotion } from './logo-motion.js';
+import { projectSound, startLogoMotion } from './logo-motion.js';
+import { createLevel, spectrumEnergy } from '../lib/sound-level.js';
 import { createFilePlayback, createVimeoPlayback } from './playback.js';
 import { createWaveform, peaksFromMediaUrl, seededPeaks } from './waveform.js';
 
 const IDLE_MS = 3000;
-const MOVE_MS = 300;
+// The header travels to the bottom edge and becomes the player bar, and back, in step with
+// the black cover (COVER_MS in cover.js): 1s on the opening expo-out. Change the two
+// together. It used to take 300ms on a short ease, which read as a jump.
+const MOVE_MS = 1000;
+// Then the player bar opens out of the logo: once the move has visually landed on the
+// expo-out (a little past half its length), over the shared grow duration (variables.css).
+const EXPAND_DELAY_MS = MOVE_MS * 0.55;
+const EXPAND_MS = 500;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
+const EASE_OUT = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
 let stop = () => {};
 let arrival = '';
@@ -151,13 +162,31 @@ function slideHeader() {
       { transform: start, transformOrigin: 'left center' },
       { transform: rest, transformOrigin: 'left center' },
     ],
-    { duration: MOVE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+    { duration: MOVE_MS, easing: EASE_OUT },
   );
-  animation.finished.catch(() => {}).then(clear);
+  // Once the move ends the header must stay where it landed. The inline transform was the
+  // start pose, and the player can still be opening: without this it flashed back to the
+  // middle for a frame before clear() ran.
+  header.style.transform = rest;
+  // Arriving on a project: first the logo travels down, then, once it has landed, the player
+  // bar opens out of it. One after the other reads as one gesture; together it was two at once.
+  let grow = null;
+  if (goingDown) {
+    grow = header.querySelector('.site-header__player')?.animate(
+      [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
+      { duration: EXPAND_MS, delay: EXPAND_DELAY_MS, easing: EASE_OUT, fill: 'backwards', id: 'player-grow' },
+    );
+  }
+  const total = grow ? Math.max(MOVE_MS, EXPAND_DELAY_MS + EXPAND_MS) : MOVE_MS;
+  // A timer too: a background tab never finishes the animations.
+  Promise.race([
+    Promise.all([animation.finished, grow?.finished].map((done) => Promise.resolve(done).catch(() => {}))),
+    new Promise((resolve) => window.setTimeout(resolve, total + 100)),
+  ]).then(clear);
 }
 
 const HEADER_HOME_KEY = 'crystal-header-home';
-const SLIDE_EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+const SLIDE_EASE = EASE_OUT;
 
 /** Where the header sits before a project opens. Used to slide it back on a full page load. */
 export function rememberHeaderHome() {
@@ -232,16 +261,6 @@ export function slideHeaderHome() {
   return animation.finished.catch(() => {});
 }
 
-function formatTime(seconds) {
-  const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  const mm = String(minutes).padStart(2, '0');
-  const ss = String(secs).padStart(2, '0');
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
-}
-
 /** Waits out the open page morph so playback can land on a black frame. */
 function whenViewTransitionsDone() {
   const animations = document.getAnimations().filter((animation) => {
@@ -251,6 +270,9 @@ function whenViewTransitionsDone() {
   if (!animations.length) return Promise.resolve();
   return Promise.all(animations.map((animation) => animation.finished.catch(() => {})));
 }
+
+// How long a video may take to show its first frame before its poster covers the black.
+const LOADING_POSTER_MS = 500;
 
 // How long history.back() may take to start a page change before closing goes there directly.
 const BACK_GRACE_MS = 700;
@@ -421,7 +443,7 @@ export function setUpProject() {
   if (seekLabel) seekLabel.hidden = !isVideo;
   if (time) {
     time.hidden = !isVideo;
-    time.textContent = '00:00/00:00';
+    time.textContent = formatTimecode(0);
   }
   if (seek) {
     seek.value = '0';
@@ -439,6 +461,7 @@ export function setUpProject() {
     // Clear leftover script fades, but keep the CSS player-in fade that is-arriving just started.
     player?.getAnimations?.().forEach((animation) => {
       if (typeof CSSAnimation !== 'undefined' && animation instanceof CSSAnimation) return;
+      if (animation.id === 'player-grow') return;
       animation.cancel();
     });
     if (player) player.style.opacity = '';
@@ -574,15 +597,144 @@ export function setUpProject() {
     poster?.removeAttribute('hidden');
   };
 
+  // The »« button: the fluted glass (fluted-glass.js, the mirror page's effect) over the
+  // video while it plays, bent a little by its sound. Shown on every video, off until clicked, and only downloaded then.
+  // A file it can read is drawn through WebGL into the fx canvas, exactly as the mirror; a
+  // Vimeo player, or a file it can't read, gets the glass's SVG filter.
+  const fxButton = player?.querySelector('[data-player-fx]');
+  const fxCanvas = project.querySelector('[data-project-fx]');
+  let fx = null;
+  let fxLoading = null;
+  // The sound that bends the glass, the same one the logo follows. Paused, it eases to still.
+  const fxLevel = createLevel();
+  let fxBins = null;
+  let fxFrame = -1;
+  const getLevel = () => {
+    // Once per frame, however many times it is asked.
+    const frame = Math.round(performance.now() / 8);
+    if (frame === fxFrame) return fxLevel.value;
+    fxFrame = frame;
+    const analyser = projectSound();
+    if (!analyser) return fxLevel.quiet();
+    if (fxBins?.length !== analyser.frequencyBinCount) fxBins = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(fxBins);
+    return fxLevel.update(spectrumEnergy(fxBins, analyser.context.sampleRate));
+  };
+  if (fxButton) {
+    fxButton.hidden = !isVideo;
+    fxButton.setAttribute('aria-pressed', 'false');
+  }
+  // WebGL over a file, frame by frame. Switches to the filter for good if the picture
+  // turns out to be unreadable.
+  const glassOver = (glass, file, makeFilter) => {
+    let raf = 0;
+    let fallback = null;
+    let placed = '';
+    // Over the picture only, not its black bars: the glass fills its canvas edge to edge,
+    // so a canvas the size of the stage cropped the video and the framing jumped.
+    const place = () => {
+      if (!(fxCanvas instanceof HTMLElement)) return;
+      const box = containBox(file.clientWidth, file.clientHeight, file.videoWidth, file.videoHeight);
+      const key = `${box.left},${box.top},${box.width},${box.height}`;
+      if (key === placed) return;
+      placed = key;
+      Object.assign(fxCanvas.style, {
+        left: `${file.offsetLeft + box.left}px`,
+        top: `${file.offsetTop + box.top}px`,
+        width: `${box.width}px`,
+        height: `${box.height}px`,
+      });
+    };
+    const loop = () => {
+      raf = document.hidden ? 0 : requestAnimationFrame(loop);
+      place();
+      if (glass.draw(file, { level: getLevel(), time: performance.now() / 1000 })) {
+        if (file.videoWidth) project.setAttribute('data-fx', '');
+        return;
+      }
+      cancelAnimationFrame(raf);
+      raf = 0;
+      project.removeAttribute('data-fx');
+      glass.destroy();
+      fallback = makeFilter();
+      fallback.start();
+    };
+    const onVisible = () => {
+      if (!document.hidden && on && !raf && !fallback) loop();
+    };
+    let on = false;
+    document.addEventListener('visibilitychange', onVisible, { signal });
+    return {
+      start() {
+        on = true;
+        if (fallback) fallback.start();
+        else if (!raf) loop();
+      },
+      stop() {
+        on = false;
+        cancelAnimationFrame(raf);
+        raf = 0;
+        project.removeAttribute('data-fx');
+        fallback?.stop();
+      },
+      destroy() {
+        this.stop();
+        if (fallback) fallback.destroy();
+        else glass.destroy();
+      },
+    };
+  };
+  const loadFx = () => {
+    if (fx || fxLoading) return fxLoading ?? Promise.resolve(fx);
+    const file = project.querySelector('[data-project-file]');
+    const frame = file instanceof HTMLVideoElement ? file : project.querySelector('[data-project-vimeo]');
+    if (!(frame instanceof HTMLElement)) return Promise.resolve(null);
+    fxLoading = import('./fluted-glass.js')
+      .then(({ createFlutedGlass, createFlutedGlassFilter }) => {
+        if (signal.aborted) return null;
+        const makeFilter = () => createFlutedGlassFilter(frame, { getLevel });
+        const readable = file instanceof HTMLVideoElement && fxCanvas instanceof HTMLCanvasElement && file.dataset.logoCors !== 'failed';
+        const glass = readable ? createFlutedGlass(fxCanvas) : null;
+        fx = glass ? glassOver(glass, file, makeFilter) : makeFilter();
+        return fx;
+      })
+      .catch(() => null)
+      .finally(() => {
+        fxLoading = null;
+      });
+    return fxLoading;
+  };
+  const syncFx = () => {
+    if (!fxButton) return;
+    const wanted = fxButton.getAttribute('aria-pressed') === 'true' && started;
+    if (!fx) {
+      if (wanted) loadFx().then((made) => made && !signal.aborted && syncFx());
+      return;
+    }
+    if (wanted) fx.start();
+    else fx.stop();
+  };
+  fxButton?.addEventListener(
+    'click',
+    () => {
+      wake();
+      fxButton.setAttribute('aria-pressed', String(fxButton.getAttribute('aria-pressed') !== 'true'));
+      syncFx();
+    },
+    { signal },
+  );
+
   const paint = (state) => {
     if (playing !== state.playing) {
       playing = state.playing;
       wake();
     }
     if (state.playing) {
+      const first = !started;
       started = true;
       project.removeAttribute('data-waiting');
       poster?.setAttribute('hidden', '');
+      if (first) syncFx();
     }
     duration = state.duration;
     project.toggleAttribute('data-started', started);
@@ -595,7 +747,7 @@ export function setUpProject() {
       seek.style.setProperty('--progress', `${ratio * 100}%`);
     }
     waveform?.setProgress(ratio);
-    time.textContent = `${formatTime(state.current)}/${formatTime(duration)}`;
+    time.textContent = formatTimecode(state.current);
   };
 
   const mountPlayback = () => {
@@ -726,7 +878,7 @@ export function setUpProject() {
       const ratio = Number(seek.value) / 1000;
       seek.style.setProperty('--progress', `${ratio * 100}%`);
       waveform?.setProgress(ratio);
-      if (time) time.textContent = `${formatTime(ratio * duration)}/${formatTime(duration)}`;
+      if (time) time.textContent = formatTimecode(ratio * duration);
       playback?.seek(ratio);
     },
     { signal },
@@ -742,20 +894,42 @@ export function setUpProject() {
     { signal },
   );
 
+  // The button that last took focus from a press of the mouse or a finger, not the keyboard.
+  let pressedByPointer = null;
+  document.addEventListener(
+    'pointerdown',
+    (event) => {
+      pressedByPointer = event.target instanceof Element ? event.target.closest('button') : null;
+    },
+    { signal, capture: true },
+  );
+  document.addEventListener(
+    'focusin',
+    (event) => {
+      if (event.target !== pressedByPointer) pressedByPointer = null;
+    },
+    { signal },
+  );
+
   document.addEventListener(
     'keydown',
     (event) => {
       wake();
       if (event.key === 'Escape') {
-        if (name?.hasAttribute('data-open')) {
-          event.preventDefault();
-          setInfoOpen(false);
-        }
+        event.preventDefault();
+        // First the details, then the project itself, as its x does.
+        if (name?.hasAttribute('data-open')) setInfoOpen(false);
+        else player?.querySelector('[data-player-close]')?.click();
         return;
       }
       if (event.key !== ' ' && event.code !== 'Space') return;
       if (!playback) return;
-      if (event.target instanceof Element && event.target.closest('button, a, input, textarea')) return;
+      const target = event.target instanceof Element ? event.target : null;
+      // A button clicked with the mouse keeps focus, and Space would press it again (the
+      // »« button, the title). Only a button reached with the keyboard keeps Space for itself.
+      const button = target?.closest('button');
+      if (target?.closest('a, input:not([type="range"]), textarea')) return;
+      if (button && button !== pressedByPointer) return;
       event.preventDefault();
       playback.toggle();
     },
@@ -766,6 +940,7 @@ export function setUpProject() {
     window.clearTimeout(idleTimer);
     unsubscribe?.();
     playback?.destroy();
+    fx?.destroy();
     waveform?.destroy();
     clearPlayerChrome(player);
     controller.abort();
@@ -783,7 +958,27 @@ export function setUpProject() {
       mountPlayback();
       wake();
       if (!playback) return;
+      // A file still downloading (a cold visit, a phone) left the screen black for seconds:
+      // show the poster until the first frame plays, which hides it again.
+      window.setTimeout(() => {
+        if (!signal.aborted && !started) showWaitingPoster();
+      }, LOADING_POSTER_MS);
       Promise.resolve(playback.play())
+        .catch(() => {
+          // The browser wants a fresh tap before sound (phones, mostly). A file video still
+          // starts, muted, and its sound comes on with the next touch or key anywhere.
+          const file = project.querySelector('[data-project-file]');
+          if (!(file instanceof HTMLVideoElement)) throw new Error('blocked');
+          file.muted = true;
+          return file.play().then(() => {
+            const unmute = () => {
+              file.muted = false;
+            };
+            for (const type of ['pointerdown', 'keydown']) {
+              document.addEventListener(type, unmute, { signal, once: true, capture: true });
+            }
+          });
+        })
         .catch(() => {
           showWaitingPoster();
         })

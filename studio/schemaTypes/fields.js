@@ -37,6 +37,15 @@ export const media = defineType({
       initialValue: 'video',
     }),
     defineField({
+      name: 'videoFile',
+      title: 'Video file',
+      type: 'file',
+      description:
+        'Upload an MP4 here, or use a Video link below. An uploaded file is used first. Uploads use Sanity’s bandwidth, so for the live site a Vimeo file link is better.',
+      options: { accept: 'video/mp4,video/webm,video/quicktime' },
+      hidden: ({ parent }) => parent?.kind === 'image',
+    }),
+    defineField({
       name: 'videoUrl',
       title: 'Video link',
       type: 'url',
@@ -65,7 +74,7 @@ export const media = defineType({
   validation: (rule) =>
     rule.custom((value) => {
       if (!value?.kind) return true;
-      if (value.kind === 'video' && !value.videoUrl) return 'Add a video link, or switch the type to Image.';
+      if (value.kind === 'video' && !value.videoUrl && !value.videoFile?.asset) return 'Upload a video file or add a video link, or switch the type to Image.';
       if (value.kind === 'image' && !value.image?.asset) return 'Upload an image, or switch the type to Video.';
       return true;
     }),
@@ -75,11 +84,12 @@ export const media = defineType({
       image: 'image',
       poster: 'poster',
       videoUrl: 'videoUrl',
+      fileName: 'videoFile.asset.originalFilename',
     },
-    prepare: ({ kind, image, poster, videoUrl }) =>
+    prepare: ({ kind, image, poster, videoUrl, fileName }) =>
       kind === 'image'
         ? { title: 'Image', media: image }
-        : { title: videoUrl || 'Video', media: poster },
+        : { title: fileName || videoUrl || 'Video', media: poster },
   },
 });
 

@@ -18,11 +18,15 @@
   --line-height-huge: 90%;
   --letter-spacing-huge: -4%;
 
+  /* Magister ST Medium: the Work stack's big titles, the 404 title and the team. Everything else is Bold. */
   --font-weight-medium: 600;
 
 
   --font-family-mono: 'Magister Mono ST', monospace;
   --font-size-mono: 10px;
+  /* Work List and Archive rows, as on the studio's preview: 12px on desktop, 10px on a phone
+     (set in their phone blocks). */
+  --font-size-list: 12px;
   --font-weight-mono: 400;
   --line-height-mono: 110.00000000000001%;
   --letter-spacing-mono: 0%;
@@ -35,6 +39,11 @@
   --small-gap: 1px;
   --big-gap: 50px;
 
+  /* The project player's picture: never wider than this, with the margin around it and room
+     for the bar under it (project.css). cover.js reads it too, so the open and close motion
+     lands on the same box. Added by Claude. */
+  --stage-max-width: 1280px;
+
   --transition-duration: 0.25s;
   --transition-timing-function: ease;
 
@@ -45,9 +54,10 @@
   --fade-duration: 0.3s;
   --text-delay: 180ms;
   --stagger: 50ms;
-  /* Closing motion: starts moving at once and ends softly, with no slow tail of a few
-     pixels. Boxes that close together follow each other closely, so none waits empty. */
-  --ease-fold: cubic-bezier(0.4, 0, 0.2, 1);
-  --fold-duration: 0.35s;
+  /* Closing motion: the client's spec is the same curve and length as opening (the menu,
+     panels and filters open and close over 500ms on cubic-bezier(0.19, 1, 0.22, 1)).
+     Boxes that close together follow each other closely, so none waits empty. */
+  --ease-fold: cubic-bezier(0.19, 1, 0.22, 1);
+  --fold-duration: 0.5s;
   --fold-stagger: 30ms;
 }

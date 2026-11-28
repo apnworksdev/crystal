@@ -13,8 +13,29 @@ main {
   flex: 1 0 auto;
 }
 
+/* No focus box anywhere, at the owner's request: this overrides the red ring globals.css
+   draws on every :focus-visible element, and the grey flash phones draw on a tap. */
+*:focus,
+*:focus-visible {
+  outline: none;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* On the archive the list and the footer share this scroller. Everywhere else
    the wrapper disappears so the body flex stays as it was. */
 .site-scroll {
   display: contents;
+}
+/* The studio's preview leaves type to the system's own smoothing. globals.css switches it to
+   the thinner antialiased rendering on a Mac, which made Magister ST Bold look light beside
+   theirs. globals.css sets it on every element (*), so it has to be undone on every element
+   too: set on html alone, nothing inherited it and the text stayed thin. Added by Claude. */
+*,
+*::before,
+*::after {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
 }

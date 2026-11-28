@@ -17,7 +17,40 @@ function stillImage() {
   return list?.querySelector('[data-work-still]');
 }
 
-function showStill(src) {
+// The project the still shows: clicking or tapping the still opens it, and it plays.
+let stillHref = '';
+
+// Desktop: the row whose picture the still shows keeps the hover look (data-shown), so it is
+// clear which row the picture belongs to once the pointer has left the list. The phone marks
+// its current row instead (data-current).
+let shownRow = null;
+
+function markShown(row) {
+  if (row === shownRow) return;
+  shownRow?.removeAttribute('data-shown');
+  shownRow = phoneQuery.matches ? null : row;
+  shownRow?.setAttribute('data-shown', '');
+}
+
+/** The row for `href` that is on screen, or the real one if none is. */
+function visibleRowFor(href) {
+  const rowsEl = rowsElement();
+  if (!rowsEl || !href) return null;
+  const view = (scrollBox() ?? rowsEl).getBoundingClientRect();
+  const all = [...rowsEl.querySelectorAll('[data-work-row]')].filter(
+    (row) => !row.hidden && row.getAttribute('href') === href,
+  );
+  return (
+    all.find((row) => {
+      const box = row.getBoundingClientRect();
+      return box.bottom > view.top && box.top < view.bottom;
+    }) ?? all.find((row) => !row.parentElement.hasAttribute('data-work-copy')) ?? null
+  );
+}
+
+function showStill(src, href, row = null) {
+  if (href) stillHref = href;
+  if (row) markShown(row);
   const image = stillImage();
   if (!image || !src || image.getAttribute('src') === src) return;
   image.removeAttribute('srcset');
@@ -38,19 +71,27 @@ let period = 0;
 let home = 0;
 let loopTimer = 0;
 
+/** The list of rows (the li items). */
 function rowsElement() {
   return list?.querySelector('.work-list__rows');
 }
+
+/** The box that scrolls around the list. */
+function scrollBox() {
+  return list?.querySelector('[data-work-scroll]');
+}
+
 
 /** Repeats the visible rows above and below the real ones. Copies are skipped by screen readers and Tab. */
 function fillLoop({ keepPlace = false } = {}) {
   endLight();
   const rowsEl = rowsElement();
+  const box = scrollBox();
   // Where the rows were within a set, to land on the same row after a rebuild.
-  const place = keepPlace && period > 0 && rowsEl ? (((rowsEl.scrollTop - home) % period) + period) % period : 0;
+  const place = keepPlace && period > 0 && box ? (((box.scrollTop - home) % period) + period) % period : 0;
   period = 0;
   home = 0;
-  if (!rowsEl) return;
+  if (!rowsEl || !box) return;
   rowsEl.querySelectorAll('[data-work-copy]').forEach((copy) => copy.remove());
   // Only the rows the filter shows are repeated. A hidden row measures 0 from the top, so
   // a set measured from it came out short and the copies drifted out of step.
@@ -65,6 +106,7 @@ function fillLoop({ keepPlace = false } = {}) {
       copy.setAttribute('data-work-copy', '');
       copy.setAttribute('aria-hidden', 'true');
       copy.querySelector('a')?.setAttribute('tabindex', '-1');
+      copy.querySelector('[data-shown]')?.removeAttribute('data-shown');
       fragment.append(copy);
     });
     return fragment;
@@ -74,17 +116,19 @@ function fillLoop({ keepPlace = false } = {}) {
   const firstCopy = rowsEl.querySelector('[data-work-copy]');
   period = firstCopy ? firstCopy.offsetTop - items[0].offsetTop : 0;
   if (period <= 0) return;
-  const screen = rowsEl.clientHeight || window.innerHeight;
+  const screen = box.clientHeight || window.innerHeight;
   const sets = Math.min(200, Math.ceil((LOOP_REACH + screen) / period));
   for (let set = 1; set < sets; set += 1) rowsEl.append(makeSet());
   const above = document.createDocumentFragment();
   for (let set = 0; set < sets; set += 1) above.append(makeSet());
   rowsEl.prepend(above);
   home = period * sets;
-  rowsEl.scrollTop = home + place;
+  box.scrollTop = home + place;
   currentRow?.removeAttribute('data-current');
   currentRow = null;
   followCurrentRow();
+  // The marked row may have been a copy that is gone now, or a row the filter hid.
+  if (stillHref && (!shownRow?.isConnected || shownRow.hidden)) markShown(visibleRowFor(stillHref));
 }
 
 /* ---------- Phone: the current row ----------
@@ -100,7 +144,7 @@ function markCurrent(row) {
   currentRow?.removeAttribute('data-current');
   currentRow = row;
   row.setAttribute('data-current', '');
-  showStill(row.dataset.still);
+  showStill(row.dataset.still, row.getAttribute('href'));
   warmNeighbours(row);
 }
 
@@ -115,7 +159,7 @@ function followCurrentRow() {
   if (!shown.length) return;
   const base = shown[0].offsetTop;
   // The line, a few pixels into the first row under the still.
-  const line = rowsEl.scrollTop + 6;
+  const line = (scrollBox()?.scrollTop ?? 0) + 6;
   let low = 0;
   let high = shown.length - 1;
   while (low < high) {
@@ -133,18 +177,20 @@ function followCurrentRowSoon() {
 
 /** Back towards the real rows by whole sets, once the scroll has stopped. Nothing moves on screen. */
 function recentre() {
-  const rowsEl = rowsElement();
+  const rowsEl = scrollBox();
   if (!rowsEl || period <= 0 || list.hidden) return;
   const away = rowsEl.scrollTop - home;
   const sets = away > 0 ? Math.floor(away / period) : Math.ceil(away / period);
   if (!sets) return;
   endLight();
   rowsEl.scrollTop -= sets * period;
+  // Same rows on screen, but other copies: the mark follows to the one in view.
+  if (shownRow && stillHref) markShown(visibleRowFor(stillHref));
 }
 
 function onListScroll(event) {
   if (!list?.isConnected || list.hidden || document.body.dataset.workView !== 'list') return;
-  if (event.target !== rowsElement()) return;
+  if (event.target !== scrollBox()) return;
   // Scrolling while the far rows are set aside would run into the gap they left. Setting
   // them aside sends a scroll event of its own, at the same place: that one is ignored.
   if (light && Math.abs(event.target.scrollTop - light.top) >= 1) endLight();
@@ -154,7 +200,7 @@ function onListScroll(event) {
 }
 
 function onListScrollEnd(event) {
-  if (!list?.isConnected || event.target !== rowsElement()) return;
+  if (!list?.isConnected || event.target !== scrollBox()) return;
   window.clearTimeout(loopTimer);
   recentre();
 }
@@ -162,7 +208,7 @@ function onListScrollEnd(event) {
 /** The still and the column bar do not scroll. A wheel over them moves the rows. */
 function onListWheel(event) {
   if (!list?.isConnected || list.hidden || document.body.dataset.workView !== 'list') return;
-  const rowsEl = list.querySelector('.work-list__rows');
+  const rowsEl = scrollBox();
   if (!rowsEl || !(event.target instanceof Node) || !list.contains(event.target) || rowsEl.contains(event.target)) return;
   if (event.target instanceof Element && event.target.closest('.work-list__filters')) return;
   const line = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rowsEl.clientHeight : 1;
@@ -192,8 +238,9 @@ function applyFilter(value) {
   });
 
   const first = rows.find((row) => !row.hidden);
-  if (first) showStill(first.dataset.still);
+  if (first) showStill(first.dataset.still, first.getAttribute('href'));
   fillLoop();
+  if (first) markShown(visibleRowFor(first.getAttribute('href')));
 }
 
 function syncInset() {
@@ -242,11 +289,12 @@ function settleLight() {
 
 function lighten() {
   if (light || !list?.isConnected || list.hidden || document.body.dataset.workView !== 'list') return;
-  const rowsEl = rowsElement();
-  const items = rowsEl ? [...rowsEl.children] : [];
+  const listEl = rowsElement();
+  const rowsEl = scrollBox();
+  const items = listEl && rowsEl ? [...listEl.children] : [];
   if (items.length < 60) return;
-  const padTop = parseFloat(getComputedStyle(rowsEl).paddingTop) || 0;
-  const gap = parseFloat(getComputedStyle(rowsEl).rowGap) || 0;
+  const padTop = parseFloat(getComputedStyle(listEl).paddingTop) || 0;
+  const gap = parseFloat(getComputedStyle(listEl).rowGap) || 0;
   const base = items[0].offsetTop;
   const view = rowsEl.clientHeight;
   const top = rowsEl.scrollTop;
@@ -369,6 +417,9 @@ function setFiltersOpen(open) {
     panel.style.transition = 'none';
     panel.style.setProperty('--bubble', '0');
     filters.removeAttribute('data-closing');
+    // The lines need one frame of their folded style after leaving display:none, or they
+    // land open with no motion.
+    panel.offsetHeight;
     filters.setAttribute('data-open', '');
     panel.offsetHeight;
     panel.style.transition = '';
@@ -462,6 +513,7 @@ function switchView(view) {
 export function setUpWork() {
   switching = null;
   currentRow = null;
+  stillHref = '';
   cancelAnimationFrame(currentFrame);
   currentFrame = 0;
   endLight();
@@ -477,8 +529,15 @@ export function setUpWork() {
   } catch {
     // Keep the reel.
   }
+  shownRow = null;
   setView(stored === 'list' ? 'list' : 'reel');
   syncInset();
+  restoreRow();
+  // The still starts on the first row.
+  if (!shownRow) {
+    const first = originalRows().find((row) => !row.hidden);
+    if (first) showStill(first.dataset.still, first.getAttribute('href'), visibleRowFor(first.getAttribute('href')));
+  }
 }
 
 document.addEventListener('click', (event) => {
@@ -513,10 +572,81 @@ document.addEventListener('click', (event) => {
   if (!event.target.closest('.work-list__filters')) setFiltersOpen(false);
 });
 
+/* ---------- Phone: tap a row to bring it to the line ----------
+
+   On a phone the row on the line under the still is the current one. Tapping another row
+   scrolls it up to the line first (it becomes current and the still shows it); tapping the
+   current row opens the project. Window capture runs before the page router's own click. */
+
+let pickTimer = 0;
+
+window.addEventListener(
+  'click',
+  (event) => {
+    if (!phoneQuery.matches || !list?.isConnected || list.hidden || document.body.dataset.workView !== 'list') return;
+    const row = event.target instanceof Element ? event.target.closest('[data-work-row]') : null;
+    const listEl = rowsElement();
+    const rowsEl = scrollBox();
+    if (!row || !listEl || !rowsEl || !listEl.contains(row) || row === currentRow) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const first = [...listEl.children].find((item) => !item.hidden);
+    if (!first) return;
+    // The line sits at the top of the rows (followCurrentRow), so the row's own place is the target.
+    const top = row.parentElement.offsetTop - first.offsetTop;
+    rowsEl.scrollTo({ top, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+    // A snapping list can drop a smooth scroll: land it once it should have arrived.
+    window.clearTimeout(pickTimer);
+    pickTimer = window.setTimeout(() => {
+      if (rowsEl.isConnected && Math.abs(rowsEl.scrollTop - top) > 1) rowsEl.scrollTo({ top, behavior: 'auto' });
+      followCurrentRow();
+    }, 700);
+  },
+  true,
+);
+
 /** Points the shared still at the project about to open, so the cover starts there. */
 function armListStill(row) {
   if (!row) return;
-  showStill(row.dataset.still);
+  showStill(row.dataset.still, row.getAttribute('href'), row);
+  rememberRow(row);
+}
+
+/* ---------- Back from a project ----------
+
+   Closing a project opened from the list comes back to the list where it was, on the row
+   that was opened and with the same filter, instead of the top of the list. */
+
+/** @type {{ href: string, filter: string, place: number } | null} */
+let returnTo = null;
+// The page the last page change left from.
+let leftFrom = '';
+document.addEventListener('astro:before-preparation', (event) => {
+  leftFrom = event.from?.pathname ?? '';
+});
+
+function rememberRow(row) {
+  const rowsEl = scrollBox();
+  if (!rowsEl || period <= 0) return;
+  returnTo = {
+    href: row.getAttribute('href') || '',
+    filter: list.querySelector('[data-filter][aria-pressed="true"]')?.dataset.filter || 'all',
+    // Where the rows were within a set: the same rows show at the same place in any set.
+    place: (((rowsEl.scrollTop - home) % period) + period) % period,
+  };
+}
+
+/** After setup: back on the list from the project it opened, put the list back as it was. */
+function restoreRow() {
+  const back = returnTo;
+  returnTo = null;
+  if (!back || leftFrom !== back.href || document.body.dataset.workView !== 'list') return;
+  if (back.filter !== 'all') applyFilter(back.filter);
+  const rowsEl = scrollBox();
+  if (!rowsEl || period <= 0) return;
+  rowsEl.scrollTop = home + back.place;
+  const row = originalRows().find((candidate) => candidate.getAttribute('href') === back.href);
+  if (row) showStill(row.dataset.still, back.href, visibleRowFor(back.href));
 }
 
 document.addEventListener('click', (event) => {
@@ -549,7 +679,7 @@ document.addEventListener('pointerover', (event) => {
   if (!list?.isConnected || list.hidden || phoneQuery.matches) return;
   const row = event.target.closest?.('[data-work-row]');
   if (!row || row.hidden || !list.contains(row)) return;
-  showStill(row.dataset.still);
+  showStill(row.dataset.still, row.getAttribute('href'), row);
   warmNeighbours(row);
 });
 
@@ -557,7 +687,7 @@ document.addEventListener('focusin', (event) => {
   if (!list?.isConnected || list.hidden) return;
   const row = event.target.closest?.('[data-work-row]');
   if (!row || row.hidden || !list.contains(row)) return;
-  showStill(row.dataset.still);
+  showStill(row.dataset.still, row.getAttribute('href'), row);
 });
 
 let fillTimer = 0;
@@ -593,3 +723,12 @@ document.addEventListener('pointerdown', (event) => {
   if (!list?.isConnected || !(event.target instanceof Element)) return;
   if (event.target.closest('.site-header')) lighten();
 }, { passive: true });
+
+// The still is the project's thumbnail: a click or tap on it opens that project, which plays
+// on arrival. It goes through the row's own link, so the page change is the usual one.
+document.addEventListener('click', (event) => {
+  if (!(event.target instanceof Element) || !list?.isConnected || !stillHref) return;
+  if (!event.target.closest('[data-work-still-frame]')) return;
+  const row = originalRows().find((candidate) => candidate.getAttribute('href') === stillHref);
+  row?.click();
+});

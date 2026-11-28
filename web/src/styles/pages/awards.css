@@ -39,7 +39,7 @@ body[data-page='awards'] {
   padding: calc(var(--big-gap) / 2) var(--margin);
   list-style: none;
   font-family: var(--font-family-mono);
-  font-size: var(--font-size-mono);
+  font-size: var(--font-size-list);
   font-weight: var(--font-weight-mono);
   line-height: var(--line-height-mono);
   letter-spacing: var(--letter-spacing-mono);
@@ -48,6 +48,8 @@ body[data-page='awards'] {
 .award {
   position: relative;
   text-align: center;
+  /* The scramble's glyphs never change a line's width. */
+  font-kerning: none;
 }
 
 .award__text {
@@ -67,6 +69,16 @@ body[data-page='awards'] {
   display: block;
 }
 
+/* Behaviour added by Claude: a ceremony passing under the header row fades out, so it never
+   reads through and around the logo (awards.js marks it). Restyle freely. */
+.award__ceremony {
+  transition: opacity var(--fade-duration) var(--ease-out);
+}
+
+.award__ceremony[data-under-header] {
+  opacity: 0;
+}
+
 .award__year {
   position: absolute;
   z-index: 1;
@@ -74,6 +86,37 @@ body[data-page='awards'] {
   right: 0;
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+/* As on the studio's preview: the award's name at the far left and the year at the far right,
+   with the category and the work centred between them. Added by Claude for the client's
+   notes: restyle freely. */
+@media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
+  .award {
+    min-height: var(--big-gap);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .award__text {
+    position: static;
+    align-self: center;
+  }
+
+  .award__category,
+  .award__work {
+    position: relative;
+    z-index: 1;
+  }
+
+  .award__ceremony {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+  }
 }
 
 /* The image is the page background. Only the text (not the empty row) reveals it. */
@@ -111,6 +154,10 @@ body[data-page='awards'] {
 /* Phone: no room for the side padding. No hover either: the entry at the centre of
    the screen shows its image (data-centred, set by awards.js). */
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .awards {
+    font-size: var(--font-size-mono);
+  }
+
   .award__text {
     padding-inline: var(--margin);
   }

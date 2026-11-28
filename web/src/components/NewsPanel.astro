@@ -27,9 +27,7 @@ const firstRatio = first?.width && first?.height ? first.width / first.height : 
   <div class="news-panel__head">
     <h2 class="news-panel__title" id={titleId}>News</h2>
     <button class="news-panel__close" type="button" data-news-close aria-label="Close news">
-      <svg viewBox="0 0 11 11" aria-hidden="true">
-        <path d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z" fill="currentColor"></path>
-      </svg>
+      <svg viewBox="0 0 21 24" aria-hidden="true"><path d="M5 6.5L16 17.5M16 6.5L5 17.5" stroke="currentColor" stroke-width="1" fill="none"></path></svg>
     </button>
   </div>
   <div class="news-panel__body">
@@ -55,14 +53,10 @@ const firstRatio = first?.width && first?.height ? first.width / first.height : 
         several && (
           <div class="news-panel__arrows">
             <button class="news-panel__arrow" type="button" data-news-step="-1" aria-label="Previous news">
-              <svg viewBox="0 0 8 9" fill="none" aria-hidden="true">
-                <path d="M7.50391 8.2168L0.503906 4.2168L7.50391 0.216797" stroke-width="0.5" stroke="currentColor" />
-              </svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18L8 12L15 6" stroke="currentColor" stroke-width="1" fill="none" /></svg>
             </button>
             <button class="news-panel__arrow" type="button" data-news-step="1" aria-label="Next news">
-              <svg viewBox="0 0 8 9" fill="none" aria-hidden="true">
-                <path d="M0.124023 0.216797L7.12402 4.2168L0.124023 8.2168" stroke-width="0.5" stroke="currentColor" />
-              </svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6L16 12L9 18" stroke="currentColor" stroke-width="1" fill="none" /></svg>
             </button>
           </div>
         )

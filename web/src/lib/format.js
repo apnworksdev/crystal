@@ -33,3 +33,16 @@ export function creditRows(blocks) {
     })
     .filter((row) => row.label || row.value);
 }
+
+// The player's timecode, as on the studio's preview: the playback position alone, as
+// HH:MM:SS:FF at 24 frames a second.
+const FPS = 24;
+
+export function formatTimecode(seconds) {
+  const t = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const whole = Math.floor(t);
+  const frames = Math.min(FPS - 1, Math.floor((t - whole) * FPS));
+  return [Math.floor(whole / 3600), Math.floor(whole / 60) % 60, whole % 60, frames]
+    .map((n) => String(n).padStart(2, '0'))
+    .join(':');
+}

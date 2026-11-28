@@ -1,28 +1,19 @@
-// News panel in the header. Opens a few seconds after the intro, once per tab:
-// closing it is remembered in sessionStorage, so only a new tab shows it again.
+// News panel in the header. It opens only with About, beside it, as on the studio's
+// preview, and has its own close: closing News leaves About open. Closing About folds
+// News away with it. Nothing opens it on its own.
 // The header persists across page transitions, so the panel is wired up once.
 // Arrows change item; wheel / touch on the pictures scrolls within the item. The
 // window size follows the first picture of the current item only.
 //
-// The same panel sits beside About. If it is already open when About opens, it
-// stays put with no motion. If it was closed, it opens and closes with About
-// until the visitor closes it on their own.
-//
-// It never shows on a project page, where the header is the player: it waits, and
-// opens once the visitor is back on another page. Its width moves the header, so it
-// announces its motion (crystal:menu-motion) for pages that follow the header, such
-// as the Work list, which is pushed aside like it is by the menu.
-
-const DELAY = 3000;
+// It never shows on a project page, where the header is the player. Its width moves the
+// header, so it announces its motion (crystal:menu-motion) for pages that follow the
+// header, such as the Work list, which is pushed aside like it is by the menu.
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 let panel = null;
 let index = 0;
-let timer = 0;
-// True when news was opened because About opened while news was closed.
+// True while News is open because About opened it.
 let openedWithAbout = false;
-// True when news was due, or showing, while a project page was open.
-let waiting = false;
 
 function onProject() {
   return document.body.dataset.page === 'project';
@@ -33,23 +24,6 @@ function announceMotion() {
   document.dispatchEvent(new CustomEvent('crystal:menu-motion'));
 }
 
-const storageKey = () => `news:${panel?.dataset.newsKey ?? ''}`;
-
-function wasClosed() {
-  try {
-    return Boolean(sessionStorage.getItem(storageKey()));
-  } catch {
-    return false;
-  }
-}
-
-function rememberClosed() {
-  try {
-    sessionStorage.setItem(storageKey(), '1');
-  } catch {
-    // Storage can be blocked. The panel then comes back on the next full load.
-  }
-}
 
 /** Sizes the window to the first picture of the shown item. */
 function applyRatio(target, itemIndex) {
@@ -103,20 +77,11 @@ function reveal(animate) {
   announceMotion();
 }
 
-function open() {
-  if (!panel || wasClosed()) return;
-  if (onProject()) {
-    waiting = true;
-    return;
-  }
-  openedWithAbout = false;
-  reveal(true);
-}
-
 function finishClose() {
   const header = panel?.closest('.site-header');
   header?.removeAttribute('data-news');
   header?.removeAttribute('data-news-closing');
+  header?.removeAttribute('data-news-folding');
   if (panel) {
     panel.hidden = true;
     panel.inert = true;
@@ -127,8 +92,6 @@ function finishClose() {
 function close() {
   const header = panel?.closest('.site-header');
   if (!header || !panel || panel.hidden) return;
-  window.clearTimeout(timer);
-  rememberClosed();
   openedWithAbout = false;
   if (reducedMotion.matches) {
     finishClose();
@@ -151,28 +114,49 @@ function close() {
   window.setTimeout(end, grow * 2 + 100);
 }
 
+/**
+ * Desktop About closing: News folds up and down with it but keeps its width, so the two
+ * become one strip. header.js then puts it away (hideNewsNow) as the strip turns back into
+ * the menu row.
+ */
+export function closeNewsFolding() {
+  const header = panel?.closest('.site-header');
+  if (!header || !panel || panel.hidden) return;
+  // Already closing on its own x: let that finish rather than widening it back out.
+  if (header.hasAttribute('data-news-closing')) return;
+  openedWithAbout = false;
+  header.setAttribute('data-news-folding', '');
+  header.setAttribute('data-news-closing', '');
+  announceMotion();
+}
+
+function isFolding() {
+  return Boolean(panel?.closest('.site-header')?.hasAttribute('data-news-folding'));
+}
+
 /** Whether the header news panel is showing. */
 export function isNewsOpen() {
   return Boolean(panel && !panel.hidden);
 }
 
-/**
- * About opened while news was closed: open with About's motion and close with it
- * later. If news is already open, leave it and do not tie it to About.
- */
+/** About opened: News opens beside it, with About's motion, and closes with it later. */
 export function openNewsWithAbout() {
-  if (!panel) return;
-  window.clearTimeout(timer);
-  if (!panel.hidden) {
-    openedWithAbout = false;
-    return;
-  }
+  if (!panel || onProject()) return;
+  // Reopened while a fold was still in progress: start from closed.
+  if (isFolding()) finishClose();
   openedWithAbout = true;
+  if (!panel.hidden) return;
   reveal(true);
 }
 
 /** About is closing: fold news only if it was opened with About. */
 export function closeNewsWithAbout() {
+  // Folded with About's desktop close but not yet handed back (a page link, or About
+  // dismissed mid-fold): put it away now, so it never stays behind as a folded strip.
+  if (isFolding()) {
+    hideNewsNow();
+    return;
+  }
   if (!openedWithAbout || !panel || panel.hidden) {
     openedWithAbout = false;
     return;
@@ -182,21 +166,13 @@ export function closeNewsWithAbout() {
 
 /** Closes the panel at once, without its motion (menu on phone, and similar). */
 export function hideNewsNow() {
-  if (!panel) return;
-  window.clearTimeout(timer);
-  if (panel.hidden) return;
-  rememberClosed();
+  if (!panel || panel.hidden) return;
   finishClose();
 }
 
-/** Closes the panel, or stops it from opening, as its close button does. */
+/** Closes the panel, as its close button does. */
 export function dismissNews() {
-  if (!panel || wasClosed()) return;
-  if (panel.hidden) {
-    rememberClosed();
-    window.clearTimeout(timer);
-    return;
-  }
+  if (!panel || panel.hidden) return;
   close();
 }
 
@@ -220,25 +196,9 @@ function onKeyDown(event) {
   close();
 }
 
-/**
- * A new page on the same header. A project page puts the panel away at once (it is never
- * shown there, and the page change covers it); the next other page brings it back.
- */
+/** A project page puts the panel away at once: it is never shown there. */
 function syncToPage() {
-  if (!panel || wasClosed()) return;
-  if (onProject()) {
-    window.clearTimeout(timer);
-    if (!panel.hidden) {
-      finishClose();
-      waiting = true;
-    }
-    return;
-  }
-  if (!waiting) return;
-  waiting = false;
-  window.clearTimeout(timer);
-  // A moment after the page has arrived, so it opens on a settled page.
-  timer = window.setTimeout(open, 900);
+  if (panel && onProject() && !panel.hidden) finishClose();
 }
 
 /** Runs after each page setup. The first call on a new header wires it up. */
@@ -252,12 +212,8 @@ export function setUpNews() {
   panel = found;
   index = 0;
   openedWithAbout = false;
-  waiting = false;
-  window.clearTimeout(timer);
   applyRatio(panel, 0);
-  if (wasClosed()) return;
   panel.addEventListener('click', onClick);
-  timer = window.setTimeout(open, DELAY);
 }
 
 document.addEventListener('keydown', onKeyDown);

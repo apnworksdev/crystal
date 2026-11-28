@@ -1,8 +1,11 @@
 ---
+import '../styles/pages/404.css';
 import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Page not found">
-  <h1 class="page-title">This page doesn’t exist.</h1>
-  <p class="empty-message"><a href="/">Back to the home page</a></p>
+  <section class="not-found">
+    <h1 class="not-found__title">This page doesn’t exist.</h1>
+    <a class="not-found__link" href="/">Back to the home page</a>
+  </section>
 </Base>

@@ -68,24 +68,57 @@ body[data-work-view='list'] .work-list[hidden] {
   min-width: 0;
   min-height: 0;
   font-family: var(--font-family-mono);
-  font-size: var(--font-size-mono);
+  font-size: var(--font-size-list);
   font-weight: var(--font-weight-mono);
   line-height: var(--line-height-mono);
   letter-spacing: var(--letter-spacing-mono);
 }
 
+/* The client's rows: 10px at the sides and 20px between the columns. */
 .work-list__head,
 .work-list__row {
   display: grid;
   grid-template-columns: 4.5rem minmax(0, 1.7fr) minmax(0, 0.8fr) 4.5rem 8.5rem;
-  column-gap: var(--gap);
+  column-gap: var(--margin);
   align-items: center;
-  padding-inline: var(--inline-gap);
+  padding-inline: var(--gap);
 }
 
 .work-list__head > :nth-child(5),
 .work-list__row > :nth-child(5) {
   text-align: right;
+}
+
+/* Behaviour added by Claude: the open menu pushes the list right and the fixed columns
+   (Index, Year, Time) left almost nothing for the title and the brand. When the table gets
+   narrow it drops Index and Year, then Time, so the title and the brand keep their room.
+   The phone block below sets its own columns. Restyle freely. */
+.work-list__table {
+  container-type: inline-size;
+}
+
+@container (max-width: 44rem) {
+  .work-list__head,
+  .work-list__row {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.8fr) 8.5rem;
+  }
+
+  .work-list__head > :is(:nth-child(1), :nth-child(4)),
+  .work-list__row > :is(:nth-child(1), :nth-child(4)) {
+    display: none;
+  }
+}
+
+@container (max-width: 28rem) {
+  .work-list__head,
+  .work-list__row {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.8fr);
+  }
+
+  .work-list__head > :nth-child(5),
+  .work-list__row > :nth-child(5) {
+    display: none;
+  }
 }
 
 .work-list__head {
@@ -95,10 +128,21 @@ body[data-work-view='list'] .work-list[hidden] {
   color: var(--background-color);
 }
 
-/* The only part that scrolls. work.js repeats the rows inside it so it never runs out. */
-.work-list__rows {
+/* The only part that scrolls. work.js repeats the rows inside it so it never runs out.
+   The scroll box (work.js scrollBox) holds the list of rows (rowsElement). */
+.work-list__scroll {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* Behaviour: the rows click into place one by one, the more mechanical feel of the earlier
+     pass (the phone already did; the endless loop in work.js keeps working with it). */
+  scroll-snap-type: y mandatory;
+  scroll-padding-top: var(--small-gap);
+}
+
+.work-list__rows {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -107,13 +151,14 @@ body[data-work-view='list'] .work-list[hidden] {
   gap: var(--small-gap);
   padding-top: var(--small-gap);
   padding-bottom: var(--big-gap);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
 }
 
 .work-list__rows > li {
   flex: none;
+}
+
+.work-list__rows > li:not([data-work-spacer]) {
+  scroll-snap-align: start;
 }
 
 .work-list__row {
@@ -128,11 +173,9 @@ body[data-work-view='list'] .work-list[hidden] {
   position: absolute;
   top: 0;
   left: 0;
-  width: 200%;
-  height: 200%;
+  width: 100%;
+  height: 100%;
   box-shadow: inset 0 0 0 1px currentColor;
-  transform-origin: top left;
-  transform: scale(0.5);
   pointer-events: none;
 }
 
@@ -140,8 +183,11 @@ body[data-work-view='list'] .work-list[hidden] {
   display: none;
 }
 
+/* [data-shown]: the row whose picture the still shows keeps this look after the pointer
+   leaves (work.js). Added by Claude. */
 .work-list__row:hover,
-.work-list__row:focus-visible {
+.work-list__row:focus-visible,
+.work-list__row[data-shown] {
   color: var(--foreground-color);
 }
 
@@ -190,16 +236,46 @@ body[data-work-view='list'] .work-list[hidden] {
   gap: var(--small-gap);
 }
 
-/* Same wipe as the nav: the buttons are full size and the stack reveals downward. */
+/* Line by line, like the phone menu column: each filter grows from the corner under Close,
+   one after another, on the client's curve (500ms, cubic-bezier(0.19, 1, 0.22, 1)), and its
+   label fades in once the box is under way. Closing folds them back the other way round.
+   The panel's own --bubble only times the whole motion, so work.js knows when it has
+   closed. Behaviour added by Claude. */
 .work-list__filters[data-open] .work-list__panel,
 .work-list__filters[data-closing] .work-list__panel {
   --bubble: 0;
-  clip-path: inset(0 0 calc(100% * (1 - var(--bubble))) 0);
-  transition: --bubble 0.18s linear;
+  transition: --bubble calc(var(--grow-duration) + var(--count, 1) * var(--stagger)) linear;
 }
 
 .work-list__filters[data-open]:not([data-closing]) .work-list__panel {
   --bubble: 1;
+}
+
+.work-list__panel .work-list__filter {
+  clip-path: inset(0 0 100% 100%);
+  color: transparent;
+  transition:
+    clip-path var(--grow-duration) var(--ease-out),
+    color var(--fade-duration) var(--ease-out);
+  transition-delay: calc((var(--count, 1) - 1 - var(--n, 0)) * var(--fold-stagger));
+}
+
+.work-list__filters[data-open]:not([data-closing]) .work-list__panel .work-list__filter {
+  clip-path: inset(0);
+  color: var(--background-color);
+}
+
+/* Hover keeps its own colours once the line is open. */
+@media (hover: hover) {
+  .work-list__filters[data-open]:not([data-closing]) .work-list__panel .work-list__filter:is(:hover, :focus-visible) {
+    color: var(--foreground-color);
+  }
+}
+
+.work-list__filters[data-open]:not([data-closing]) .work-list__panel .work-list__filter {
+  transition-delay:
+    calc(var(--n, 0) * var(--stagger)),
+    calc(var(--n, 0) * var(--stagger) + var(--text-delay));
 }
 
 .work-list__panel[hidden],
@@ -237,6 +313,12 @@ body[data-work-view='list'] .work-list[hidden] {
 
 /* Phone: the header is docked at the top. The still runs full width under it,
    then the table with only the title and the brand. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .work-list__table {
+    font-size: var(--font-size-mono);
+  }
+}
+
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
   .work-list {
     padding: calc(var(--margin) + var(--height-bubble) + var(--small-gap)) var(--margin) 0;
@@ -280,7 +362,24 @@ body[data-work-view='list'] .work-list[hidden] {
     color: var(--black);
   }
 
-  .work-list__rows {
+  /* No legend on phone: the active row (below) already reads as the title and the brand. */
+  .work-list__head {
+    display: none;
+  }
+
+  /* The current row, on the line under the still (work.js sets data-current), is filled
+     like the legend was. */
+  .work-list__row[data-current],
+  .work-list__row[data-current]:hover:not(:focus-visible) {
+    background: var(--foreground-color);
+    color: var(--background-color);
+  }
+
+  .work-list__row[data-current]::before {
+    box-shadow: inset 0 0 0 1px var(--foreground-color);
+  }
+
+  .work-list__scroll {
     scroll-snap-type: y mandatory;
     scroll-padding-top: var(--small-gap);
   }
@@ -299,4 +398,9 @@ body[data-work-view='list'] .work-list[hidden] {
     box-shadow: inset 0 0 0 1px var(--foreground-color);
     outline: none;
   }
+}
+
+/* Behaviour: the still opens the project it shows (work.js). Added by Claude. */
+.work-list__still {
+  cursor: pointer;
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { creditRows, formatPrice } from './format.js';
+import { creditRows, formatPrice, formatTimecode } from './format.js';
 
 test('a bare number gets a dollar sign', () => {
   assert.equal(formatPrice('15'), '$15');
@@ -31,4 +31,11 @@ test('credits split into a role and a name at the first colon', () => {
   // A colon later in the name stays in the name.
   assert.deepEqual(creditRows([block('Mix: Studio: B')]), [{ label: 'Mix', value: 'Studio: B' }]);
   assert.deepEqual(creditRows(undefined), []);
+});
+
+test('the timecode is HH:MM:SS:FF at 24 frames a second', () => {
+  assert.equal(formatTimecode(0), '00:00:00:00');
+  assert.equal(formatTimecode(61.5), '00:01:01:12');
+  assert.equal(formatTimecode(3725.99), '01:02:05:23');
+  assert.equal(formatTimecode(NaN), '00:00:00:00');
 });

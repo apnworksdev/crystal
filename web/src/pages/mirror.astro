@@ -4,8 +4,8 @@
 // It has no site header and no page router, so leaving it always does a full
 // page load and the camera is released.
 import { stegaClean } from '@sanity/client/stega';
-import Logo from '../components/icons/Logo.astro';
 import { getSettings } from '../lib/content.js';
+import { FORCE_COMPRESSED_FLEX, WORD, layout, letterPath } from '../lib/wordmark.js';
 import '../styles/common/variables.css';
 import '../styles/common/fonts.css';
 import '../styles/common/globals.css';
@@ -13,6 +13,21 @@ import '../styles/pages/mirror.css';
 
 const settings = await getSettings();
 const siteTitle = stegaClean(settings.title);
+
+// The logo before the wordmark canvas takes over: the same still word, drawn from the same
+// glyphs and layout, in the canvas's 5:1 box (mirror.css). The site's SVG logo has older
+// letter shapes and sat lower, so the logo jumped when the canvas replaced it.
+const LOGO_W = 1000;
+const LOGO_H = 200;
+const restLetters = layout({
+  W: LOGO_W,
+  H: LOGO_H,
+  flexes: Array(WORD.length).fill(FORCE_COMPRESSED_FLEX),
+  inner: 1,
+}).letters.map((letter) => ({
+  d: letterPath(letter.ch, letter.t),
+  transform: `translate(${letter.x} ${letter.top}) scale(${letter.scale * letter.sx} ${letter.scale})`,
+}));
 ---
 
 <!doctype html>
@@ -31,7 +46,10 @@ const siteTitle = stegaClean(settings.title);
       <video class="mirror__video" data-mirror-video muted playsinline aria-hidden="true"></video>
 
       <h1 class="mirror__logo">
-        <Logo />
+        <svg viewBox={`0 0 ${LOGO_W} ${LOGO_H}`} fill="currentColor" aria-hidden="true" focusable="false">
+          {restLetters.map((letter) => <path d={letter.d} transform={letter.transform} />)}
+        </svg>
+        <canvas class="mirror__wordmark" data-wordmark aria-hidden="true"></canvas>
         <span class="sr-only">{siteTitle} mirror</span>
       </h1>
 
@@ -65,11 +83,7 @@ const siteTitle = stegaClean(settings.title);
         </button>
 
         <button class="mirror__close" type="button" data-mirror-close aria-label="Close">
-          <svg viewBox="0 0 11 11" aria-hidden="true">
-            <path
-              d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z"
-              fill="currentColor"></path>
-          </svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.7 6.7L17.3 17.3M17.3 6.7L6.7 17.3" stroke="currentColor" stroke-width="1" fill="none"></path></svg>
         </button>
       </div>
 

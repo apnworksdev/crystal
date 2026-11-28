@@ -102,6 +102,12 @@
   transition-delay: 0s, calc(var(--fold-duration) * 0.6), 0s, 0s;
 }
 
+/* Behaviour: closing with About on desktop, News only folds up and down and keeps its width,
+   so it joins About's strip; header.js then hands the strip back to the menu. */
+.site-header[data-news][data-news-closing][data-news-folding] .news-panel[data-news-panel] {
+  --news-open: 1;
+}
+
 /* The contents keep their full width while the strip grows, so nothing reflows. */
 .site-header[data-news] .news-panel[data-news-panel]:not([hidden]) > * {
   flex: none;
@@ -160,9 +166,10 @@
   width: var(--height-bubble);
 }
 
+/* The client's controls: 1px outlines drawn at their own size (21 × 24 for a window's x). */
 .news-panel__close svg {
-  width: 11px;
-  height: 11px;
+  width: 21px;
+  height: 24px;
 }
 
 .news-panel__titles {
@@ -208,12 +215,12 @@
 }
 
 .news-panel__arrow {
-  width: 1rem;
+  width: var(--height-bubble);
 }
 
 .news-panel__arrow svg {
-  width: 8px;
-  height: 9px;
+  width: 24px;
+  height: 24px;
 }
 
 .news-panel__images {

@@ -48,6 +48,8 @@ const firstStill = rows.find((row) => row.still)?.still;
             <span>Year</span>
             <span>Time</span>
           </div>
+          {/* The scroll box, and the list of rows in it. */}
+          <div class="work-list__scroll" data-work-scroll>
           <ol class="work-list__rows">
             {rows.map((row) => (
               <li>
@@ -67,6 +69,7 @@ const firstStill = rows.find((row) => row.still)?.still;
               </li>
             ))}
           </ol>
+          </div>
           <p class="work-list__empty" data-work-empty hidden>
             No projects in this filter.
           </p>
@@ -78,18 +81,25 @@ const firstStill = rows.find((row) => row.still)?.still;
           <button class="work-list__filter" type="button" data-filters-close hidden>
             Close
           </button>
-          <div class="work-list__panel" data-filters-panel hidden>
-            {CATEGORIES.map((category) => (
+          <div class="work-list__panel" data-filters-panel hidden style={`--count: ${CATEGORIES.length + 1}`}>
+            {CATEGORIES.map((category, index) => (
               <button
                 class="work-list__filter"
                 type="button"
                 data-filter={category.value}
                 aria-pressed="false"
+                style={`--n: ${index}`}
               >
                 {category.label}
               </button>
             ))}
-            <button class="work-list__filter" type="button" data-filter="all" aria-pressed="true">
+            <button
+              class="work-list__filter"
+              type="button"
+              data-filter="all"
+              aria-pressed="true"
+              style={`--n: ${CATEGORIES.length}`}
+            >
               All
             </button>
           </div>

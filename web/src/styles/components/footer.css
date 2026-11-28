@@ -18,6 +18,20 @@
   display: block;
 }
 
+/* Privacy and Cookies together on the last line, in Magister Mono ST Regular at 12px, as on
+   the studio's preview. Added by Claude for the client's notes: restyle freely. */
+.site-footer__legal {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  width: min(22rem, calc(100vw - var(--margin) * 2));
+  margin-top: var(--margin);
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  font-weight: var(--font-weight-mono);
+  line-height: var(--line-height-mono);
+}
+
 .site-footer__form {
   display: flex;
   align-items: baseline;
@@ -123,32 +137,57 @@ body:is(
 }
 
 /* Desktop, every page: fixed to the bottom of the screen, never at the end of a scroll (the
-   archive's list included). It waits just below the screen and rises by its own height
-   while the menu is open (footer-reveal.js sets data-footer-raised); the page stays put.
-   The query is the phone query negated, as in header.css: change them together. */
+   archive's list included). It comes with the open menu as on the studio's preview: it is
+   as wide as the menu row and expands with it from the logo (header.js sets --menu-w), and
+   its lines fade in one after another once the menu has grown. Closing folds it back with
+   the menu and the lines go at once. The page stays put. The query is the phone query
+   negated, as in header.css: change them together. Behaviour added by Claude. */
 @media not ((max-width: 48rem) or ((max-height: 30rem) and (pointer: coarse))) {
   html body:not([data-page='project']) .site-footer {
     position: fixed;
     z-index: 2;
-    top: 100dvh;
+    top: auto;
+    bottom: var(--margin);
     left: 0;
     right: auto;
+    width: calc(82px + var(--inline-gap) * 2);
     min-height: 0;
     margin-left: var(--margin);
-    padding-top: 0;
-    padding-bottom: var(--margin);
+    padding: 0;
+    overflow: hidden;
     scroll-snap-align: none;
     visibility: hidden;
+    pointer-events: none;
     transition:
-      translate var(--grow-duration) var(--ease-out),
+      width var(--grow-duration) var(--ease-out),
       visibility 0s linear var(--grow-duration),
       filter var(--transition-duration) linear;
   }
 
   html body[data-footer-raised]:not([data-page='project']) .site-footer {
-    translate: 0 -100%;
+    width: var(--menu-w, auto);
     visibility: visible;
-    transition-delay: 0s;
+    pointer-events: auto;
+    transition:
+      width var(--grow-duration) var(--ease-out),
+      visibility 0s linear 0s,
+      filter var(--transition-duration) linear;
+  }
+
+  /* The client's timing: on close every line fades out together over 300ms; on open the
+     first starts after 200ms and each next one 50ms later, each over 300ms. */
+  html body:not([data-page='project']) .site-footer > * {
+    opacity: 0;
+    transition: opacity var(--fade-duration) var(--ease-out);
+  }
+
+  html body[data-footer-raised]:not([data-page='project']) .site-footer > * {
+    opacity: 1;
+    transition-delay: calc(200ms + var(--i, 0) * var(--stagger));
+  }
+
+  .site-footer :is(.site-footer__form, .site-footer__legal) {
+    width: 100%;
   }
 }
 

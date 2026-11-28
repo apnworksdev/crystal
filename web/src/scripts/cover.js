@@ -7,7 +7,11 @@
 // project player shows it. The layer lives on <html>, outside <body>, so it stays up while
 // the router swaps the page, and fades once the project's own media is showing.
 
-const COVER_MS = 700;
+import { stageBox } from '../lib/fit.js';
+
+// Slower than the client's 0.7s on request, so opening a project feels unhurried. The header
+// travels with it (MOVE_MS in project.js): change the two together.
+const COVER_MS = 1000;
 const EASING = 'cubic-bezier(0.19, 1, 0.22, 1)';
 // The expo-out has visually landed by this share of the motion: the next page loads from here.
 const LANDED = 0.55;
@@ -82,8 +86,18 @@ function fitBox(ratio, rect, fill) {
   };
 }
 
-function screenRect() {
-  return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+/** Where the player shows the picture: the same box as project.css (lib/fit.js stageBox). */
+function stageRect() {
+  const style = getComputedStyle(document.documentElement);
+  const px = (name, fallback) => {
+    const value = parseFloat(style.getPropertyValue(name));
+    return Number.isFinite(value) ? value : fallback;
+  };
+  return stageBox(window.innerWidth, window.innerHeight, {
+    margin: px('--margin', 20),
+    bar: px('--height-bubble', 24),
+    maxWidth: px('--stage-max-width', Infinity),
+  });
 }
 
 function clipTo(rect) {
@@ -107,7 +121,7 @@ function createLayer(picture, rect) {
   let whole = null;
   if (picture) {
     const ratio = picture.ratio || rect.width / rect.height;
-    whole = fitBox(ratio, screenRect(), false);
+    whole = fitBox(ratio, stageRect(), false);
     const image = document.createElement('img');
     image.alt = '';
     image.decoding = 'sync';

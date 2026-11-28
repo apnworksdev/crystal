@@ -37,11 +37,17 @@ html.intro-play .intro {
   pointer-events: none;
 }
 
-.intro__plate svg {
+.intro__canvas {
+  position: absolute;
+  inset: 0;
   display: block;
-  flex: none;
-  width: min(52vw, 40rem);
-  height: auto;
+  width: 100%;
+  height: 100%;
+}
+
+/* The canvas draws the red box itself once it runs, so the plate steps aside. */
+.intro[data-intro-drawn] .intro__plate {
+  display: none;
 }
 
 html.intro-play .site-header,
@@ -89,10 +95,6 @@ html.intro-play.intro-page .site-footer {
 /* Phone: the plate lands on the whole wordmark in the header, which then
    shrinks to its c (intro-collapse) before the + fades in. */
 @media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
-  .intro__plate svg {
-    width: 76vw;
-  }
-
   /* Behaviour: the collapse eases in and out over the grow duration, like the flight
      before it, instead of a quick linear cut. The bubble and the clip share one curve, so
      the letters always end at the bubble's edge. intro.js waits for --grow-duration. */

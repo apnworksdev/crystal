@@ -1,0 +1,45 @@
+/* 404 page. Added by Claude so it is not bare text in a corner: the words take the Work
+   title's huge size, centred at the top, and the way home sits at the bottom, clear of the
+   header row in the middle. Only tokens from variables.css. Restyle freely. */
+
+.not-found {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 100dvh;
+  padding: var(--margin);
+  color: var(--foreground-color);
+  text-align: center;
+}
+
+.not-found__title {
+  margin: 0;
+  font-size: var(--font-size-huge);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-huge);
+  letter-spacing: var(--letter-spacing-huge);
+  text-wrap: balance;
+}
+
+.not-found__link {
+  display: inline-block;
+  padding-inline: var(--inline-gap);
+  line-height: var(--height-bubble);
+  background: var(--foreground-color);
+  color: var(--background-color);
+  text-decoration: none;
+}
+
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .not-found__title {
+    font-size: min(var(--font-size-huge), 14vw);
+  }
+
+  /* The phone header is docked at the bottom left: the link goes up out of its way. */
+  .not-found {
+    justify-content: flex-start;
+    gap: var(--big-gap);
+  }
+}

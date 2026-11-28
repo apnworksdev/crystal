@@ -11,7 +11,7 @@ and hosting on Netlify. Read this before changing structure, names or styles.
 - **The site owner writes the CSS.** Don't add or restyle visual CSS unless asked. Behaviour-only CSS, such as
   view transitions, is fine, but say so when you add it.
 - **Keep the public site fast.** It's static, and loads nothing from preview mode. Every page ships about
-  22 KB of compressed JavaScript (the shared script plus Astro's router); the home carousel adds about 10 KB on the home page only.
+  29 KB of compressed JavaScript (the shared script, the wordmark with its glyph outlines, and Astro's router); the home carousel adds about 10 KB on the home page only.
   Check the size of `web/dist/_astro` after adding anything that runs in the browser.
 - **The user handles Git.** Don't commit or push unless asked.
 
@@ -45,9 +45,24 @@ lib/          data and helpers, no browser code
   card-stack.js   card positions and easing for the merch stack and pile
   work-stack.js   card positions for the Work stack
   awards-loop.js  wrap maths and centred entry for the endless Awards roll
+  sound-level.js  the random stand-in spectrum used when a project video's sound can't be read, and
+                  the 0–1 level that bends the »« glass
+  wordmark.js     the client's CRYSTAL wordmark (Modulizer, glyph set V3): letter shapes, width balancing,
+                  the wave, bass/mid/treble analysis and layout. No DOM
+  format.js also has formatTimecode (the player's HH:MM:SS:FF)
+  fit.js          containBox: where a contained (letterboxed) picture sits in its box; the »« glass
+                  is drawn over exactly that part
 pages/        one file per route
 preview/      code that only exists in preview mode (draft-mode route, session check, click-to-edit)
 scripts/      browser code (page.js: video autoplay, click-to-load Vimeo player; news.js: the news panel;
+              wordmark.js: draws the wordmark into a canvas; logo-motion.js: the header logo canvas; on a project it
+              moves while the video plays (its sound when it can be read, a random stand-in otherwise) and
+              stops when it pauses; on the mirror it follows the mic; intro.js: the red intro with the wave, shrinking into the
+              logo; fluted-glass.js: the one picture effect, shared by the mirror (camera) and the player's »«
+              button (on every video, off until clicked, loaded then). Sound ripples the seams and swells the
+              bands: a project's video sound, the mirror's mic. WebGL for the camera or a file it can
+              read; an SVG approximation on the player's wrapper for Vimeo or an unreadable file;
+              award-scramble.js: the Awards pointer scramble;
               footer-reveal.js: the footer rising from the bottom of the screen with the desktop menu;
               handoff.js: lets Merch hand its motion to a product page instead of the content fade; box-resize.js: dragging the bottom
               edge of the About, Team and News windows; scroll-end.js: scrollend with a fallback for
@@ -87,8 +102,10 @@ web/src/styles/
 └── pages/                one file per page: awards.astro → awards.css
 ```
 
-- **Common files:** imported once, in `layouts/Base.astro`, in the order variables, fonts, globals, main,
-  transitions.
+- **Common files:** imported once, in `layouts/Base.astro`, in the order variables, globals, main, transitions.
+  `fonts.css` is the exception: Base.astro prints it as its own inline `<style>`, identical on every page, so the
+  page router keeps it across page changes. Imported like the others, it was bundled into each page's styles and
+  re-added on every change, and the header text blinked and shifted. Keep it that way.
 - **Component and page files:** imported by the component or page that uses them, at the top of its frontmatter:
   `import '../styles/pages/awards.css';`. Astro then only loads them on pages that need them.
 - **Never** create an index file that imports every stylesheet. It would send all the CSS to every page.
@@ -100,6 +117,9 @@ web/src/styles/
 - **Opening motion** (menu, About, Home footer, stacks, page reveal) shares one curve: `--ease-out`,
   `--grow-duration`, `--fade-duration`, `--text-delay` and `--stagger` in `variables.css`. Scripts that animate
   by hand use the same expo-out. Reuse these instead of new timings.
+- **Closing uses the same curve.** The client's spec: menu, panels and filters open and close over 500ms on
+  `cubic-bezier(0.19, 1, 0.22, 1)` (`--ease-fold` and `--fold-duration` now equal the opening values). The desktop
+  footer's lines fade in 200ms after it opens, 50ms apart, 300ms each, and all fade out together over 300ms.
 - **Utility classes come from `globals.css`:** `.sr-only` (visually hidden, still read by screen readers) and
   `.hidden`.
 
@@ -119,23 +139,24 @@ web/src/styles/
 
 | Block | Where | Elements |
 |---|---|---|
-| `site-header` | Base layout | `__logo`, `__nav`, `__link`, `__merch`, `__product-title`, `__product`, `__price`, `__buy` |
+| `site-header` | Base layout. The logo is drawn by `__wordmark` (a canvas); the SVG stays for no-JS | `__logo`, `__wordmark`, `__nav`, `__link`, `__merch`, `__product-title`, `__product`, `__price`, `__buy` |
 | `site-footer` | Base layout | `__link` |
 | `media` | Media.astro (no wrapper element) | `__image`, `__poster`, `__video`, `__play`, `__loop`, `__player` |
-| `news-panel` | NewsPanel.astro, in the header beside the logo. The same element stays open beside About (no second copy) | `__head`, `__title`, `__close`, `__body`, `__bar`, `__titles`, `__item-title`, `__arrows`, `__arrow`, `__images`, `__image` |
-| `intro` | Base layout, the opening plate on first arrival | `__plate` |
+| `news-panel` | NewsPanel.astro, in the header beside the logo. Opens only with About, closes on its own x or with About (no second copy) | `__head`, `__title`, `__close`, `__body`, `__bar`, `__titles`, `__item-title`, `__arrows`, `__arrow`, `__images`, `__image` |
+| `intro` | Base layout, the red intro on first arrival: the plate until the canvas draws | `__plate`, `__canvas` |
 | `site-scroll` | Base layout, the scrolling area around the page content | none |
 | `project-cover` | Created by `cover.js`: the black layer that opens and closes a project | none |
-| `project-roulette` | ProjectRoulette.astro, the home carousel | `__viewport`, `__track`, `__slide`, `__card`, `__media` |
+| `project-roulette` | ProjectRoulette.astro, the home carousel. A row on desktop, a vertical column on phone (`data-axis`). First click highlights (`.is-picked`, title in the header), a second opens | `__viewport`, `__track`, `__slide`, `__card`, `__media` |
 | `project-reel` | ProjectReel.astro, on /work | `__stage`, `__stack`, `__card`, `__run`, `__brand`, `__title` |
 | `work-list` | ProjectList.astro, the Work list on /work. Styled in `project-list.css` | `__head`, `__title`, `__filters`, `__filter`, `__layout`, `__table`, `__rows`, `__row`, `__brand`, `__panel`, `__still`, `__empty` |
-| `project` | projects/[slug] | `__header`, `__title`, `__meta`, `__media`, `__body`, `__description`, `__credits`, `__credit`, `__credit-label`, `__credit-value` |
+| `project` | projects/[slug]. `__fx` is the »« effect's canvas | `__fx`, `__header`, `__title`, `__meta`, `__media`, `__body`, `__description`, `__credits`, `__credit`, `__credit-label`, `__credit-value` |
 | `archive` | archive. A native snapping scroll; rows that pass the bar move above it (`archive.js`) | `__item`, `__index`, `__title`, `__brand`, `__year`, `__time`, `__snaps`, `__snap` (invisible snap points, one per row, that never move) |
-| `awards`, `award` | awards | `award__text`, `__ceremony`, `__category`, `__work`, `__image`, `__year` |
+| `awards`, `award` | awards | `award__text`, `__char` (one per character, for the scramble), `__ceremony`, `__category`, `__work`, `__image`, `__year` |
 | `merch-reel` | merch page | `__stage`, `__stack`, `__card`, `__run` |
 | `product-strip` | product page. A row on desktop, a column on phone; the merch pile behind fades away as it opens | `__stage`, `__pile`, `__ghost`, `__track`, `__card`, `__run` |
-| `about-panel`, `team`, `team-member` | About panel in the header. There is no /about route | `about-panel__head`, `__title`, `__tabs`, `__tab`, `__close`, `__text`, `__team-link`, `__contact`, `__footer` (phone only), `team__list`, `team-member__name`, `__image`, `__card`, `__position`, `__description`, `__track`, `__track-label` |
-| `mirror` | Hidden /mirror page, opened by three quick clicks on the header logo. No header, footer or router | `__canvas`, `__video`, `__logo`, `__bar`, `__enter`, `__toggle`, `__slash`, `__close` |
+| `about-panel`, `team`, `team-member` | About panel in the header. There is no /about route. Desktop: News · About · Team windows, each with its own x (Team's sets `data-team-closed`) | `about-panel__head`, `__team-head`, `__title`, `__tabs`, `__tab`, `__close`, `__text`, `__team-link`, `__contact`, `__footer` (phone only), `team__list`, `team-member__name`, `__image`, `__card`, `__position`, `__description`, `__track`, `__track-label` |
+| `mirror` | Hidden /mirror page, opened by three quick clicks on the header logo. No header, footer or router | `__canvas`, `__video`, `__logo`, `__wordmark`, `__bar`, `__enter`, `__toggle`, `__slash`, `__close` |
+| `not-found` | 404 page (`404.css`) | `__title`, `__link` |
 | `rotate-notice` | Base layout. Covers every page but the project player on a phone held sideways (`rotate-notice.css`); portrait and desktop never see it | `__logo`, `__text` |
 | `page-title`, `empty-message`, `rich-text` | Shared | none |
 
@@ -158,8 +179,8 @@ web/src/styles/
 | `award` | Documents | `ceremony`, `category`, `work`, `year`, `image` |
 | `product` | Documents | `title`, `price` (a string with currency), `url`, `images` |
 | `aboutPage` | Single document | `content` (rich text) and a `team` array. Shown in the header About panel |
-| `siteSettings` | Single document | Site name, SEO description, email, social links, `news` (items with a title, one or more images and an optional title link). Opens in the header a few seconds after arrival; closing it lasts until a new tab |
-| `media` | Object | `kind` is `video` or `image`. Videos are links (`videoUrl`): Vimeo, or a direct MP4 |
+| `siteSettings` | Single document | Site name, SEO description, email, social links, `news` (items with a title, one or more images and an optional title link). Opens in the header only with About |
+| `media` | Object | `kind` is `video` or `image`. A video is an uploaded file (`videoFile`, used first) or a link (`videoUrl`): Vimeo, or a direct MP4. Uploaded files are served by Sanity's CDN, which only lets an origin read them (the full glass, the real-sound logo) if it's in the project's CORS origins; elsewhere they still play. Only an MP4 its host shares (CORS) lets the logo follow the real sound and gets the full WebGL glass; Vimeo moves the logo with a random stand-in and gets the SVG approximation of the glass |
 | `richText` | Array | Paragraphs, bold, italic and links only |
 
 Single documents have fixed IDs equal to their type name and are listed in `SINGLETONS` in

@@ -365,9 +365,35 @@ function recentre() {
   const sets = away > 0 ? Math.floor(away / period) : Math.ceil(away / period);
   if (!sets) return;
   scrollEl.scrollTop -= sets * period;
+  // A key move still on its way lands on the same row in the new set.
+  if (keyTarget !== null) keyTarget -= sets * period;
 }
 
 /* ---------- Keys ---------- */
+
+// Where the keys are taking the list. Quick presses add up from here instead of from
+// where a smooth scroll happens to be, so each press moves one more row.
+let keyTarget = null;
+let keyTimer = 0;
+// Longer than a smooth key scroll takes.
+const KEY_LAND_MS = 700;
+
+/**
+ * Scrolls to `top` for a key press. On the snapping list the browser sometimes drops a
+ * smooth scroll and the press did nothing (about every other one), so once it should
+ * have arrived, a list that is not there is put there.
+ */
+function keyScroll(top) {
+  keyTarget = top;
+  scrollEl.scrollTo({ top, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+  window.clearTimeout(keyTimer);
+  keyTimer = window.setTimeout(() => {
+    if (scrollEl && keyTarget !== null && Math.abs(scrollEl.scrollTop - keyTarget) > 1) {
+      scrollEl.scrollTo({ top: keyTarget, behavior: 'auto' });
+    }
+    keyTarget = null;
+  }, KEY_LAND_MS);
+}
 
 function onKeyDown(event) {
   if (document.body.dataset.page !== 'archive' || !scrollEl || !rows.length) return;
@@ -383,12 +409,14 @@ function onKeyDown(event) {
     const into = period > 0 ? (((scrollEl.scrollTop - home) % period) + period) % period : scrollEl.scrollTop;
     const first = scrollEl.scrollTop - into;
     const top = event.key === 'Home' ? first : first + Math.max(0, (period || scrollEl.scrollHeight) - pitch);
-    scrollEl.scrollTo({ top, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+    keyScroll(top);
     return;
   }
   if (!(event.key in moves)) return;
   event.preventDefault();
-  scrollEl.scrollBy({ top: moves[event.key], behavior: reducedMotion.matches ? 'auto' : 'smooth' });
+  // From where the last press was going, rounded onto a row, so presses never collapse.
+  const from = keyTarget ?? scrollEl.scrollTop;
+  keyScroll(Math.round((from + moves[event.key]) / pitch) * pitch);
 }
 
 /* ---------- Layout ---------- */
@@ -406,6 +434,8 @@ function scheduleLayout() {
 
 function detach() {
   endLight();
+  window.clearTimeout(keyTimer);
+  keyTarget = null;
   folding = false;
   stopScrollEnd?.();
   stopScrollEnd = null;
@@ -459,6 +489,9 @@ function tweenWidth(header, open) {
   const shut = !header.classList.contains('is-archive-open') && !header.style.width;
   const from = shut ? rowWidth(header) : header.getBoundingClientRect().width;
   endTween?.();
+  // The column titles wait for the bar to land (header.css): laid out in a growing bar, they
+  // slid across with it.
+  header.setAttribute('data-archive-tweening', '');
 
   still.forEach((element) => {
     element.style.transition = 'none';
@@ -479,6 +512,7 @@ function tweenWidth(header, open) {
     header.removeEventListener('transitionend', onEnd);
     window.clearTimeout(timer);
     header.style.width = '';
+    header.removeAttribute('data-archive-tweening');
     endTween = null;
     if (header.isConnected && document.body.dataset.page === 'archive') align();
   };
@@ -621,3 +655,11 @@ window.addEventListener('resize', () => {
 });
 
 window.addEventListener('keydown', onKeyDown);
+
+// Scrolling by hand takes over from a key move still on its way.
+function dropKeyMove() {
+  window.clearTimeout(keyTimer);
+  keyTarget = null;
+}
+window.addEventListener('wheel', dropKeyMove, { passive: true });
+window.addEventListener('touchstart', dropKeyMove, { passive: true });

@@ -52,6 +52,31 @@
   transform-origin: center center;
 }
 
+/* Behaviour: each slide is wider than its picture, and the middle one sits above its
+   neighbours, so its empty edges caught clicks meant for the next picture. Only the
+   pictures take the pointer; a drag anywhere still reaches the viewport. Added by Claude. */
+.project-roulette__slide {
+  pointer-events: none;
+}
+
+.project-roulette__card {
+  pointer-events: auto;
+}
+
+/* Behaviour: a first click highlights a project (roulette.js), the others step back out of
+   focus: still easy to see, a little faded and softly blurred. They ease in and out on the
+   opening curve. Added by Claude: restyle freely. */
+.project-roulette__card {
+  transition:
+    opacity var(--grow-duration) var(--ease-out),
+    filter var(--grow-duration) var(--ease-out);
+}
+
+.project-roulette:has(.is-picked) .project-roulette__slide:not(.is-picked) .project-roulette__card {
+  opacity: 0.7;
+  filter: blur(4px);
+}
+
 .project-roulette__media {
   --roulette-max-width: 46vw;
   --roulette-max-height: 64vh;
@@ -90,14 +115,30 @@
   max-height: none;
 }
 
-@media (max-width: 40rem) {
-  .project-roulette__slide {
-    flex-basis: 78%;
+/* Phone: the row runs down the screen and scrolls vertically (roulette.js sets data-axis).
+   The middle picture fills the width between 12px gutters. Behaviour only: restyle freely. */
+@media (max-width: 48rem), (max-height: 30rem) and (pointer: coarse) {
+  .project-roulette__viewport {
+    height: 100%;
+  }
+
+  .project-roulette[data-axis='y'] .project-roulette__track {
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .project-roulette[data-axis='y'] .project-roulette__slide {
+    flex-basis: 40%;
+    width: 100%;
+  }
+
+  .project-roulette[data-axis='y'] .project-roulette__card {
+    transform: translateY(var(--roulette-shift, 0px)) scale(var(--roulette-scale, 1));
   }
 
   .project-roulette__media {
-    --roulette-max-width: 78vw;
-    --roulette-max-height: 56vh;
+    --roulette-max-width: calc(100vw - 24px);
+    --roulette-max-height: 42dvh;
   }
 }
 

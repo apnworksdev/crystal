@@ -9,6 +9,7 @@
 // (data-centred, see awards.css). Reduced motion: no roll, one list, free scroll.
 
 import { centredIndex, copiesAfter, wrapIntoList } from '../lib/awards-loop.js';
+import { setUpScramble, splitAwardText } from './award-scramble.js';
 import { watchScrollEnd } from './scroll-end.js';
 
 // The reference's credits speed (its app.js, `SPEED = 24`).
@@ -153,6 +154,45 @@ function onScroll() {
   }
   updateCentred();
   updateHovered();
+  markUnderHeader();
+}
+
+/** @type {Set<Element>} Ceremonies hidden because the header row sits on them. */
+let underHeader = new Set();
+
+/**
+ * The header row stays in the middle of the screen while the list rolls under it, and a
+ * ceremony passing under the logo read through and around it. Hide the ones it covers
+ * (awards.css fades them) and bring them back once they have passed.
+ */
+function markUnderHeader() {
+  const header = document.querySelector('.site-header');
+  const parts = header
+    ? [...header.querySelectorAll('.site-header__logo, .site-header__context, .site-header__nav, .site-header__toggle')]
+        .map((part) => part.getBoundingClientRect())
+        .filter((box) => box.width > 0 && box.height > 0)
+    : [];
+  const next = new Set();
+  if (scroller && parts.length && !header.hasAttribute('data-about')) {
+    const left = Math.min(...parts.map((box) => box.left));
+    const right = Math.max(...parts.map((box) => box.right));
+    const top = Math.min(...parts.map((box) => box.top));
+    const bottom = Math.max(...parts.map((box) => box.bottom));
+    // A few points across the row and just past its edges, so a line touching it counts.
+    for (let x = left + 2; x <= right; x += 24) {
+      for (const y of [top - 4, (top + bottom) / 2, bottom + 4]) {
+        for (const element of document.elementsFromPoint(x, y)) {
+          const ceremony = element.closest('.award__ceremony');
+          if (ceremony && scroller.contains(ceremony)) next.add(ceremony);
+        }
+      }
+    }
+  }
+  underHeader.forEach((ceremony) => {
+    if (!next.has(ceremony)) ceremony.removeAttribute('data-under-header');
+  });
+  next.forEach((ceremony) => ceremony.setAttribute('data-under-header', ''));
+  underHeader = next;
 }
 
 function onScrollEnd() {
@@ -213,6 +253,8 @@ function onFocusOut() {
 }
 
 function tearDown() {
+  underHeader.forEach((ceremony) => ceremony.removeAttribute('data-under-header'));
+  underHeader = new Set();
   if (frame) cancelAnimationFrame(frame);
   frame = 0;
   stopWatchingEnd?.();
@@ -253,6 +295,8 @@ export function setUpAwards() {
   list = track?.querySelector('.awards:not([aria-hidden="true"])') ?? null;
   if (!track || !list) return;
 
+  // Each character in its own span for the pointer's scramble, before the copies are made.
+  splitAwardText(track);
   looping = !reducedMotion.matches;
   scroller.toggleAttribute('data-awards-loop', looping);
   // Copies, heights and the start position are all set here, before the page fades in.
@@ -270,6 +314,7 @@ export function setUpAwards() {
   scroller.addEventListener('touchstart', onTouchStart, { signal, passive: true });
   scroller.addEventListener('touchend', onTouchEnd, { signal, passive: true });
   scroller.addEventListener('touchcancel', onTouchEnd, { signal, passive: true });
+  setUpScramble(scroller, signal);
   stopWatchingEnd = watchScrollEnd(scroller, onScrollEnd);
   // Fonts loading, a resize or a phone rotating all change the heights.
   resizeObserver = new ResizeObserver(() => measure());

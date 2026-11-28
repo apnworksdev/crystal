@@ -13,7 +13,9 @@ const STEP_DURATION = 11;
 // Wheel, trackpad and drag all feed one input, as on the reference site: every
 // pixel moves the row the same share of a project there, then the row eases
 // after it (about an eighth of a second to close most of the gap) and rests
-// wherever it stops. No snap, so a single wheel notch is never pulled back.
+// then settles with a project in the middle (the client wants one always centred). A wheel
+// or trackpad gesture that moved a little goes on to the next project instead of falling
+// back, so a single notch still steps.
 // The reference row gives a centred project 598px at a 1000px tall window
 // (a 915px wide one caps it), and a phone column one width (less 24px of
 // gutters) of a 598 x 474 picture.
@@ -29,11 +31,17 @@ const LINE_HEIGHT = 33;
 // Letting go of a drag keeps its speed and loses 8% of it every 16ms.
 const FLING_DECAY = 0.92;
 const FLING_FRAME = 16;
+// Phone: below this speed (px per ms) a fling hands over to centring the nearest project.
+const SETTLE_SPEED = 0.35;
 // A touch that moves less than this stays a tap.
 const TAP_DISTANCE = 8;
 
 let embla;
 let root;
+// Phone: the row runs down the screen (a portrait column), so it scrolls vertically.
+let vertical = false;
+// The project picked by a first click or tap. A second one on it opens it.
+let picked = null;
 let frontIndex = -1;
 let pictureObserver;
 let drag = null;
@@ -77,13 +85,37 @@ function nudge(pixels) {
   engine.scrollTo.distance((-pixels * step) / projectLength(), false);
 }
 
+// A wheel or trackpad gesture: where it started and how far it has moved. It ends once no
+// wheel event has come for WHEEL_END_MS (a trackpad's momentum keeps it going).
+const WHEEL_END_MS = 160;
+// A gesture this share of a project or more goes on to the next one.
+const WHEEL_STEP = 0.12;
+let wheel = null;
+
+function endWheel() {
+  const gesture = wheel;
+  wheel = null;
+  if (!gesture || !embla) return;
+  const length = projectLength();
+  let steps = Math.round(gesture.distance / length);
+  if (!steps && Math.abs(gesture.distance) >= length * WHEEL_STEP) steps = Math.sign(gesture.distance);
+  const count = embla.scrollSnapList().length;
+  armScroll(Math.max(1, Math.abs(steps)));
+  embla.scrollTo((((gesture.start + steps) % count) + count) % count);
+}
+
 function onWheel(event) {
   if (event.ctrlKey) return;
   event.preventDefault();
   closeNav();
+  unpick();
   const unit = event.deltaMode === 1 ? LINE_HEIGHT : event.deltaMode === 2 ? innerHeight : 1;
-  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-  nudge(delta * unit);
+  const delta = (Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY) * unit;
+  if (!wheel) wheel = { start: nearestIndex(), distance: 0, timer: 0 };
+  window.clearTimeout(wheel.timer);
+  wheel.distance += delta;
+  wheel.timer = window.setTimeout(endWheel, WHEEL_END_MS);
+  nudge(delta);
 }
 
 // A dragged link would start the browser's own drag and cancel ours.
@@ -101,6 +133,8 @@ function endDrag() {
 function onPointerDown(event) {
   if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
   cancelAnimationFrame(fling);
+  if (wheel) window.clearTimeout(wheel.timer);
+  wheel = null;
   closeNav();
   swallowClick = false;
   drag = {
@@ -122,6 +156,7 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   if (!drag || event.pointerId !== drag.id) return;
   if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < TAP_DISTANCE) return;
+  if (!drag.moved) unpick();
   drag.moved = true;
   const dx = event.clientX - drag.lastX;
   const dy = event.clientY - drag.lastY;
@@ -144,18 +179,45 @@ function onPointerUp(event) {
   // The drag does not also count as a click on the picture under it.
   swallowClick = true;
   setTimeout(() => (swallowClick = false), 50);
-  if (event.type === 'pointercancel' || reducedMotion.matches) return;
+  if (event.type === 'pointercancel' || reducedMotion.matches) {
+    settle();
+    return;
+  }
 
   let last = performance.now();
   const step = (now) => {
     const elapsed = Math.min(50, now - last);
     last = now;
     speed *= FLING_DECAY ** (elapsed / FLING_FRAME);
+    // Once the fling has slowed, the nearest project eases into the centre.
+    if (Math.abs(speed) < SETTLE_SPEED) {
+      settle();
+      return;
+    }
     if (Math.abs(speed * FLING_FRAME) < 0.5) return;
     nudge(-speed * elapsed);
     fling = requestAnimationFrame(step);
   };
   fling = requestAnimationFrame(step);
+}
+
+/** Brings whichever project is nearest the middle to the centre, so the row never rests
+    between two projects. Desktop and phone alike. */
+function settle() {
+  if (!embla) return;
+  armScroll(1);
+  embla.scrollTo(nearestIndex());
+}
+
+/** The project nearest the middle right now. */
+function nearestIndex() {
+  const snaps = embla.scrollSnapList();
+  const progress = embla.scrollProgress();
+  let nearest = 0;
+  snaps.forEach((snap, index) => {
+    if (Math.abs(snapDelta(snap, progress)) < Math.abs(snapDelta(snaps[nearest], progress))) nearest = index;
+  });
+  return nearest;
 }
 
 function scrollToProject(index) {
@@ -179,8 +241,8 @@ function tightenGaps(ordered) {
 
   ordered.forEach((item) => {
     const rect = (item.picture || item.card).getBoundingClientRect();
-    item.left = rect.left;
-    item.right = rect.right;
+    item.left = vertical ? rect.top : rect.left;
+    item.right = vertical ? rect.bottom : rect.right;
   });
 
   let anchor = 0;
@@ -234,7 +296,11 @@ function updateLevels(api) {
   // Place cards from scroll progress, not from the slide box. Embla teleports
   // a looping slide while its picture is still on screen; progress does not
   // jump, so the picture keeps moving and the 1px gap stays.
-  const viewRect = api.rootNode().getBoundingClientRect();
+  const viewBox = api.rootNode().getBoundingClientRect();
+  // Along the row: left to right, or top to bottom on a phone.
+  const viewRect = vertical
+    ? { left: viewBox.top, right: viewBox.bottom, width: viewBox.height }
+    : { left: viewBox.left, right: viewBox.right, width: viewBox.width };
   const focusX = viewRect.left + viewRect.width / 2;
 
   const items = slides.map((slide, index) => {
@@ -249,9 +315,10 @@ function updateLevels(api) {
       index,
       units,
       distance,
-      // Layout size ignores the scale transform, so this is the unscaled picture.
-      boxW: box?.offsetWidth || 0,
-      boxH: box?.offsetHeight || 0,
+      // Layout size ignores the scale transform, so this is the unscaled picture. boxH is
+      // the size across the row: the height, or the width when the row runs down.
+      boxW: (vertical ? box?.offsetHeight : box?.offsetWidth) || 0,
+      boxH: (vertical ? box?.offsetWidth : box?.offsetHeight) || 0,
       shape: shapeScale(box?.offsetWidth || 0, box?.offsetHeight || 0),
       scale: 1,
       shift: 0,
@@ -298,8 +365,8 @@ function updateLevels(api) {
   items.forEach((item) => {
     if (!item.card) return;
     const rect = (item.picture || item.card).getBoundingClientRect();
-    item.visual = rect.width;
-    item.naturalCenter = rect.left + rect.width / 2;
+    item.visual = vertical ? rect.height : rect.width;
+    item.naturalCenter = vertical ? rect.top + rect.height / 2 : rect.left + rect.width / 2;
   });
 
   // A picture with no size yet must not join the row. Several of those were
@@ -348,6 +415,9 @@ function updateLevels(api) {
     // Paint order only. Slides do not cover each other.
     item.slide.style.zIndex = String(Math.round((3 - item.distance) * 10));
     item.slide.classList.toggle('is-active', inFront);
+    item.slide.classList.toggle('is-picked', isPicked(item.slide));
+    // The hook page.js reads: only a highlighted project opens on click.
+    item.slide.toggleAttribute('data-picked', isPicked(item.slide));
 
     if (!item.card) return;
     item.card.style.visibility = item.shown ? '' : 'hidden';
@@ -363,10 +433,37 @@ function updateLevels(api) {
   tightenGaps(ordered.filter((item) => item.shown));
 }
 
+/** The row repeats the projects to loop, so any copy of the picked project counts as it. */
+function isPicked(slide) {
+  return Boolean(picked && slide.dataset.slug === picked.dataset.slug);
+}
+
+/** Highlights a project: its title shows in the header, and a second click opens it. */
+function pick(slide) {
+  picked = slide;
+  setHeaderProject({ title: slide.dataset.title, slug: slide.dataset.slug });
+  if (embla) updateLevels(embla);
+}
+
+/** Moving the row on lets go of the highlighted project. */
+function unpick() {
+  if (!picked) return;
+  picked = null;
+  setHeaderProject(null);
+  if (embla) updateLevels(embla);
+}
+
+// The first click or tap on a project highlights it and brings it to the middle, staying on
+// Home. A second one on the same project opens it. Picking another moves the highlight.
 function onSlideClick(event) {
   if (!embla || !root) return;
-  const link = event.target.closest('[data-roulette-link]');
-  if (!link || !root.contains(link)) return;
+  const link = event.target instanceof Element ? event.target.closest('[data-roulette-link]') : null;
+  if (!link || !root.contains(link)) {
+    // A click anywhere else on the page lets go of the highlight. The header is left out:
+    // it shows the highlighted title and the menu.
+    if (picked && !(event.target instanceof Element && event.target.closest('.site-header'))) unpick();
+    return;
+  }
   if (swallowClick) {
     swallowClick = false;
     event.preventDefault();
@@ -376,12 +473,15 @@ function onSlideClick(event) {
 
   const slide = link.closest('.project-roulette__slide');
   const index = embla.slideNodes().indexOf(slide);
-  if (index < 0 || index === frontIndex) return;
+  if (index < 0) return;
+  // Already highlighted (this copy or another): let the click through to open the project.
+  if (isPicked(slide)) return;
 
   event.preventDefault();
   event.stopPropagation();
   closeNav();
-  scrollToProject(index);
+  pick(slide);
+  if (index !== frontIndex) scrollToProject(index);
 }
 
 function onKeyDown(event) {
@@ -391,14 +491,18 @@ function onKeyDown(event) {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target.isContentEditable) return;
   }
 
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+  if (event.key === 'Escape' && picked) {
+    unpick();
+  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
     event.preventDefault();
     closeNav();
+    unpick();
     armScroll(1);
     embla.scrollPrev();
   } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
     event.preventDefault();
     closeNav();
+    unpick();
     armScroll(1);
     embla.scrollNext();
   }
@@ -416,9 +520,10 @@ function fillRow(viewport) {
   const track = viewport.querySelector('.project-roulette__track');
   if (!track) return false;
   const originals = [...track.children].filter((slide) => !slide.hasAttribute('data-roulette-copy'));
-  const setWidth = originals.reduce((sum, slide) => sum + slide.offsetWidth, 0);
+  const length = (element) => (vertical ? element.offsetHeight : element.offsetWidth);
+  const setWidth = originals.reduce((sum, slide) => sum + length(slide), 0);
   if (!originals.length || setWidth < 1) return false;
-  const need = ROW_SCREENS * Math.max(viewport.clientWidth, 1);
+  const need = ROW_SCREENS * Math.max(vertical ? viewport.clientHeight : viewport.clientWidth, 1);
   let sets = track.children.length / originals.length;
   let added = false;
   while (setWidth * sets < need && sets < MAX_SETS) {
@@ -444,6 +549,8 @@ export function setUpRoulette() {
   }
   endDrag();
   cancelAnimationFrame(fling);
+  if (wheel) window.clearTimeout(wheel.timer);
+  wheel = null;
 
   embla?.destroy();
   embla = undefined;
@@ -457,10 +564,13 @@ export function setUpRoulette() {
   pictureObserver?.disconnect();
   pictureObserver = undefined;
   frontIndex = -1;
+  picked = null;
   root = document.querySelector('[data-roulette]');
-  // Home shows the pictures alone, so no project title sits in the header.
+  // Home shows the pictures alone until one is picked, so no project title sits in the header.
   setHeaderProject(null);
   if (!root) return;
+  vertical = phone.matches;
+  root.dataset.axis = vertical ? 'y' : 'x';
 
   const viewport = root.querySelector('.project-roulette__viewport');
   if (!viewport) return;
@@ -477,6 +587,7 @@ export function setUpRoulette() {
     {
       startIndex: Math.max(0, backIndex),
       loop: true,
+      axis: vertical ? 'y' : 'x',
       align: 'center',
       containScroll: false,
       duration: reducedMotion.matches ? 8 : STEP_DURATION,
@@ -527,6 +638,11 @@ window.addEventListener('resize', () => {
     embla.reInit();
     root.querySelectorAll('[data-roulette-copy] .project-roulette__media :is(img, video, iframe)').forEach((picture) => pictureObserver?.observe(picture));
   }
+});
+
+// Turning between phone and desktop changes the row's direction: build it again.
+phone.addEventListener('change', () => {
+  if (root?.isConnected) setUpRoulette();
 });
 
 document.addEventListener('click', onSlideClick, true);

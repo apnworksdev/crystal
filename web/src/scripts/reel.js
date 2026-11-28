@@ -71,13 +71,36 @@ function measure() {
   return true;
 }
 
+// The title wraps onto a second line when it is wider than the screen, never a third: a
+// longer one loses words from the end and gets an ellipsis.
+const TITLE_LINES = 2;
+
+function titleLines(title) {
+  const style = getComputedStyle(title);
+  const line = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 0.9;
+  const inner = title.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  return Math.round(inner / line);
+}
+
+function fitTitle(title, text) {
+  title.dataset.full = text;
+  title.textContent = text;
+  if (!title.clientHeight || titleLines(title) <= TITLE_LINES) return;
+  const words = text.split(' ');
+  while (words.length > 1) {
+    words.pop();
+    title.textContent = `${words.join(' ').replace(/[\s\-–—:,.]+$/, '')}…`;
+    if (titleLines(title) <= TITLE_LINES) return;
+  }
+}
+
 function showWords(index) {
   const card = cards[index];
   if (!card) return;
   const brand = root.querySelector('[data-reel-brand]');
   const title = root.querySelector('[data-reel-title]');
   if (brand) brand.textContent = card.dataset.brand || '';
-  if (title) title.textContent = card.dataset.title || '';
+  if (title) fitTitle(title, card.dataset.title || '');
   if (root.dataset.reelWords !== 'shown') root.dataset.reelWords = 'shown';
 }
 
@@ -242,9 +265,19 @@ function onKeyDown(event) {
   }, 0);
 }
 
+function refitTitle() {
+  const title = root?.querySelector('[data-reel-title]');
+  if (title) fitTitle(title, title.dataset.full ?? title.textContent.trim());
+}
+
 function refresh() {
+  // A new width can change where the title breaks.
+  refitTitle();
   if (measure()) paint();
 }
+
+// Measured before the font had loaded, the title broke in the wrong places.
+document.fonts?.ready.then(() => refitTitle());
 
 function teardown() {
   if (root) {

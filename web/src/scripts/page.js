@@ -214,6 +214,9 @@ document.addEventListener('click', (event) => {
   if (!(event.target instanceof Element)) return;
   const link = event.target.closest('a[href]');
   if (!link) return;
+  // Home: the first click on a project only highlights it (roulette.js). Only the
+  // highlighted one, or a drag that roulette.js already cancelled, is left alone here.
+  if (link.closest('[data-roulette]') && (event.defaultPrevented || !link.closest('[data-picked]'))) return;
   let url;
   try {
     url = new URL(link.href, location.href);

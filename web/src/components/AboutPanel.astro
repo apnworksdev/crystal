@@ -39,8 +39,8 @@ const hasNews = news.length > 0;
         )
       }
       <button class="about-panel__close" type="button" data-about-close aria-label="Close about">
-        <svg viewBox="0 0 11 11" aria-hidden="true">
-          <path d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z" fill="currentColor"></path>
+        <svg viewBox="0 0 21 24" aria-hidden="true">
+          <path d="M5 6.5L16 17.5M16 6.5L5 17.5" stroke="currentColor" stroke-width="1" fill="none"></path>
         </svg>
       </button>
     </div>
@@ -68,6 +68,15 @@ const hasNews = news.length > 0;
   {
     team.length > 0 && (
       <div class="about-panel__team">
+        {/* Desktop: Team is a window of its own beside About, with its own close. Phone uses the tabs. */}
+        <div class="about-panel__team-head">
+          <h2 class="about-panel__title">Team</h2>
+          <button class="about-panel__close" type="button" data-team-close aria-label="Close team">
+            <svg viewBox="0 0 21 24" aria-hidden="true">
+              <path d="M5 6.5L16 17.5M16 6.5L5 17.5" stroke="currentColor" stroke-width="1" fill="none"></path>
+            </svg>
+          </button>
+        </div>
         <ul class="team__list">
           {team.map((member, index) => (
             <li class="team-member">

@@ -2,7 +2,7 @@
 // survive page transitions. setUpHeader runs again after each swap.
 
 import { collapseArchive, reopenArchiveBar } from './archive.js';
-import { closeNewsWithAbout, dismissNews, openNewsWithAbout } from './news.js';
+import { closeNewsFolding, closeNewsWithAbout, dismissNews, hideNewsNow, openNewsWithAbout } from './news.js';
 import { clearFooterReveal, footerIsRaised, homeFooterTop, lowerFooter, raiseFooter } from './footer-reveal.js';
 import { pinProductMorph, productMenuClosed, productMenuOpening } from './product.js';
 // Dragging the bottom edge of the About, Team and News windows (wires itself up once).
@@ -14,7 +14,11 @@ let closeTimer = 0;
 let titleTimer = 0;
 let menuIdleTimer = 0;
 // Phone only: the column folds itself away after a while. On desktop the menu stays open.
-const MENU_IDLE_MS = 3000;
+// 3s was short enough to close under someone still reading it.
+const MENU_IDLE_MS = 6000;
+// After it folds by itself, a tap this soon was meant for the menu, not for the page under it.
+const IDLE_TAP_GUARD_MS = 1000;
+let idleClosedAt = -Infinity;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 // Same query as the phone blocks in the stylesheets.
 const phone = matchMedia('(max-width: 48rem), (max-height: 30rem) and (pointer: coarse)');
@@ -60,8 +64,10 @@ function clearLinkMotion(link) {
   link.style.color = '';
 }
 
-/** Marks the active page on the real nav links. Nothing is copied into context. */
-function syncCurrentSection(header, currentHref) {
+/** Marks the active page on the real nav links. Nothing is copied into context. With
+    `foldProject`, a shown title (the Merch product's name) folds away instead of vanishing:
+    the menu opening over it. */
+function syncCurrentSection(header, currentHref, { foldProject = false } = {}) {
   const path = location.pathname;
   let active = null;
 
@@ -80,7 +86,10 @@ function syncCurrentSection(header, currentHref) {
 
   navLinks(header).forEach(clearLinkMotion);
 
-  if (active) setHeaderProject(null);
+  if (active) {
+    if (foldProject) closeHeaderProject(header);
+    else setHeaderProject(null);
+  }
   alignWorkViews(header);
 }
 
@@ -142,7 +151,8 @@ function alignListNav(header) {
 // jumping with the column and vanishing, and fade back once it has closed.
 let viewsFade = null;
 // A fade on the expo-out was three quarters done in its first frame, so on a phone it read
-// as a cut. Fades use this even curve instead (--ease-fold), so they are seen to happen.
+// as a cut. The List and Stack fades use this even curve instead. (About's tab switch uses
+// the expo-out on purpose: it matches the client's own site.)
 const FADE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)';
 const FADE_OUT_MS = 300;
 const FADE_IN_MS = 400;
@@ -195,7 +205,7 @@ function applyNav(open, moveFocus, currentHref, { fromAbout = false } = {}) {
   toggle.setAttribute('aria-expanded', String(open));
   toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
 
-  syncCurrentSection(header, currentHref);
+  syncCurrentSection(header, currentHref, { foldProject: open });
   alignListNav(header);
 
   if (open) {
@@ -439,21 +449,102 @@ function showAboutTab(panel, tab) {
     applyAboutTab(panel, tab);
     return;
   }
+  // As on the client's site: the old contents fade out over the fade duration, then the new
+  // ones fade in over the same, both on the opening curve.
   const fade = parseFloat(getComputedStyle(header).getPropertyValue('--fade-duration')) * 1000 || 300;
-  const outMs = Math.round(fade / 2);
-  const swap = {
-    out: oldView.animate([{ opacity: 1 }, { opacity: 0 }], { duration: outMs, easing: FADE_EASING, fill: 'forwards' }),
-    timer: 0,
-  };
+  // Only the contents fade: the red frame stays up while they change.
+  const contents = (view) => (view ? [...view.children].filter((child) => !child.matches('.about-panel__team-head, .news-panel__head')) : []);
+  const fadeOut = contents(oldView).map((child) =>
+    child.animate([{ opacity: 1 }, { opacity: 0 }], { duration: fade, easing: EXPO_OUT, fill: 'forwards' }),
+  );
+  const swap = { out: { cancel: () => fadeOut.forEach((animation) => animation.cancel()) }, timer: 0 };
   // A timer, not the animation's end: a background tab never runs it.
   swap.timer = window.setTimeout(() => {
     if (tabSwap !== swap) return;
     tabSwap = null;
     applyAboutTab(panel, tab);
     swap.out.cancel();
-    aboutView(panel, tab)?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: fade, easing: FADE_EASING });
-  }, outMs);
+    contents(aboutView(panel, tab)).forEach((child) =>
+      child.animate([{ opacity: 0 }, { opacity: 1 }], { duration: fade, easing: EXPO_OUT }),
+    );
+  }, fade);
   tabSwap = swap;
+}
+
+let teamMotion = null;
+
+function endTeamMotion(panel) {
+  if (!teamMotion) return;
+  window.clearTimeout(teamMotion.timer);
+  teamMotion.animation.cancel();
+  if (teamMotion.closing) panel?.setAttribute('data-team-closed', '');
+  teamMotion = null;
+}
+
+/** Desktop: Team is a window of its own beside About. Its x folds just it away, and "Meet
+    our team" in About brings it back. The row narrows or widens on the opening curve. */
+function setTeamOpen(panel, open) {
+  if (!panel || panel.hasAttribute('data-team-closed') !== open) return;
+  endTeamMotion(panel);
+  const header = panel.closest('.site-header');
+  const from = panel.getBoundingClientRect().width;
+  panel.toggleAttribute('data-team-closed', !open);
+  const to = panel.getBoundingClientRect().width;
+  if (reducedMotion.matches || Math.abs(from - to) < 1) return;
+  // Closing keeps the team showing while the row narrows over it, then takes it away.
+  if (!open) panel.removeAttribute('data-team-closed');
+  const ms = parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 || 500;
+  // Opening and closing share the client's curve: 500ms on cubic-bezier(0.19, 1, 0.22, 1).
+  const animation = panel.animate([{ width: `${from}px` }, { width: `${to}px` }], { duration: ms, easing: EXPO_OUT });
+  teamMotion = { animation, closing: !open, timer: window.setTimeout(() => endTeamMotion(panel), ms) };
+  if (open) {
+    teamMotion.closing = false;
+    panel.querySelector('.about-panel__team')?.scrollTo(0, 0);
+  }
+}
+
+/** Desktop: Team has a window of its own and it is showing. */
+function teamWindowOpen(panel) {
+  return Boolean(panel?.querySelector('.about-panel__team')) && !panel.hasAttribute('data-team-closed');
+}
+
+let copyMotion = null;
+
+function endCopyMotion(panel) {
+  if (!copyMotion) return;
+  window.clearTimeout(copyMotion.timer);
+  copyMotion.animations.forEach((animation) => animation.cancel());
+  if (copyMotion.closing) panel?.setAttribute('data-copy-closed', '');
+  copyMotion = null;
+}
+
+/** Desktop: About's own x folds just the About window away, as Team's does. The About
+    window narrows to nothing on the opening curve while the row narrows with it, so Team
+    slides into its place. */
+function setCopyOpen(panel, open) {
+  if (!panel || panel.hasAttribute('data-copy-closed') !== open) return;
+  endCopyMotion(panel);
+  const header = panel.closest('.site-header');
+  const copy = panel.querySelector('.about-panel__copy');
+  const from = panel.getBoundingClientRect().width;
+  const copyWidth = copy?.getBoundingClientRect().width || 0;
+  panel.toggleAttribute('data-copy-closed', !open);
+  const to = panel.getBoundingClientRect().width;
+  if (!copy || reducedMotion.matches || Math.abs(from - to) < 1) return;
+  if (!open) panel.removeAttribute('data-copy-closed');
+  const ms = growMs(header);
+  const gap = parseFloat(getComputedStyle(header).getPropertyValue('--small-gap')) || 1;
+  const shut = { width: '0px', minWidth: '0px', marginRight: `${-gap}px`, opacity: 0 };
+  const shown = { width: `${copyWidth || to - from}px`, minWidth: '0px', marginRight: '0px', opacity: 1 };
+  const options = { duration: ms, easing: EXPO_OUT };
+  copyMotion = {
+    closing: !open,
+    animations: [
+      panel.animate([{ width: `${from}px` }, { width: `${to}px` }], options),
+      copy.animate(open ? [shut, shown] : [shown, shut], options),
+    ],
+    timer: window.setTimeout(() => endCopyMotion(panel), ms),
+  };
 }
 
 function openAbout(moveFocus) {
@@ -467,6 +558,7 @@ function openAbout(moveFocus) {
     return;
   }
   clearAboutMotion();
+  clearStripGhost();
   // Desktop: the windows start as a strip over the open menu, so the menu turns into them,
   // and close back to its width. News stays in its own place beside them, so only the
   // menu's width counts.
@@ -487,6 +579,10 @@ function openAbout(moveFocus) {
     panel.inert = false;
     const team = panel.querySelector('.about-panel__team');
     if (team) team.scrollTop = 0;
+    endTeamMotion(panel);
+    panel.removeAttribute('data-team-closed');
+    endCopyMotion(panel);
+    panel.removeAttribute('data-copy-closed');
     showAboutTab(panel, 'about');
   }
   header.setAttribute('data-about', '');
@@ -496,16 +592,37 @@ function openAbout(moveFocus) {
     header.removeAttribute('data-about-closing');
   }
   header.querySelector('[data-about-open]')?.setAttribute('aria-expanded', 'true');
+  // The + stays a + beside the windows: each window closes with its own x, and the +
+  // goes back to the menu.
   const toggle = header.querySelector('.site-header__toggle');
   toggle?.removeAttribute('inert');
-  toggle?.setAttribute('aria-expanded', 'true');
-  toggle?.setAttribute('aria-label', 'Close about');
+  toggle?.setAttribute('aria-expanded', 'false');
+  toggle?.setAttribute('aria-label', 'Back to menu');
   if (moveFocus) header.querySelector('[data-about-close]')?.focus();
 }
+
+/** Phone: the menu link that sits on the header row once the column opens. The column
+    grows up from a header docked at the bottom, and down everywhere else. */
+function phoneRowLink(header) {
+  const links = navLinks(header);
+  return document.body.matches(DOCKED_BOTTOM) ? links[links.length - 1] : links[0];
+}
+
+function phoneRowWidth(header) {
+  const link = phoneRowLink(header);
+  if (!link) return 0;
+  if (!link.style.getPropertyValue('--full')) measureBubbles(header);
+  return parseFloat(link.style.getPropertyValue('--full')) || 0;
+}
+
+const HANDOVER_MIN_PX = 0.5;
+const HANDOVER_MAX_PX = 40;
 
 function finishAboutClose(moveFocus) {
   if (!aboutOpen) return;
   const header = document.querySelector('.site-header');
+  // Phone: where the strip ended, so the row's link can take over from exactly there.
+  const strip = phone.matches ? aboutPanel(header)?.getBoundingClientRect() : null;
   hideAbout();
   applyNav(true, moveFocus, undefined, { fromAbout: true });
   // The windows have narrowed back to the menu's width, so the menu is already there:
@@ -520,6 +637,23 @@ function finishAboutClose(moveFocus) {
     });
     header.querySelector('.site-header__nav')?.getAnimations().forEach((animation) => animation.finish());
   }
+  // Phone: the strip ended as the header row's link, so that one box is already there; the
+  // rest of the column grows from it.
+  if (header && phone.matches && !reducedMotion.matches) {
+    const link = phoneRowLink(header);
+    link?.getAnimations().forEach((animation) => {
+      if (animation.transitionProperty === '--bubble') animation.finish();
+    });
+    // The link sits a pixel or so from where the strip ended (the panel and the column are laid
+    // out separately), which read as a jump as the window closed. It starts on the strip and
+    // settles into place on the opening curve.
+    const dx = strip && link ? strip.left - link.getBoundingClientRect().left : 0;
+    // Under half a pixel shows no jump; more than a few pixels means the layout changed under
+    // it (a rotation), and a glide across would look wrong.
+    if (Math.abs(dx) >= HANDOVER_MIN_PX && Math.abs(dx) < HANDOVER_MAX_PX) {
+      link.animate([{ translate: `${dx}px 0` }, { translate: '0 0' }], { duration: growMs(header), easing: EXPO_OUT });
+    }
+  }
   reopenArchiveBar();
 }
 
@@ -527,15 +661,40 @@ function finishAboutClose(moveFocus) {
 function closeAboutToNav(moveFocus) {
   const header = document.querySelector('.site-header');
   if (!aboutOpen || !header || header.hasAttribute('data-about-closing')) return;
-  // Fold news with About when it was opened with About; an independent popup stays.
-  closeNewsWithAbout();
   const panel = aboutPanel(header);
   if (!panel || reducedMotion.matches) {
+    closeNewsWithAbout();
     finishAboutClose(moveFocus);
     return;
   }
-  // The strip narrows to the menu's own width and ends there, so the menu takes over at once.
-  const menuWidth = Number(panel.dataset.menuWidth) || 0;
+  const grow = growMs(header);
+
+  // Desktop, as on the client's preview: the windows fold into one strip, then the strip
+  // turns back into the menu row. The menu opens as usual while the strip shrinks onto the
+  // About button's place, uncovering the other items as they grow. It used to narrow, empty,
+  // to the menu's width and then swap to the menu, which read as a strange extra step.
+  if (!phone.matches) {
+    // News folds with About; it is put away when the strip hands back (handBackStrip).
+    closeNewsFolding();
+    // Fold only: the windows keep their width while they close up and down.
+    panel.style.setProperty('--about-w-end', '1');
+    header.setAttribute('data-about-closing', '');
+    endAboutClose = (event) => {
+      if (event && (event.target !== panel || event.propertyName !== '--about')) return;
+      clearAboutMotion();
+      handBackStrip(header, panel, moveFocus);
+    };
+    panel.addEventListener('transitionend', endAboutClose);
+    // Fallback for a background tab, which never runs the transition.
+    aboutMotion = window.setTimeout(endAboutClose, grow + 100);
+    return;
+  }
+
+  // Fold news with About.
+  closeNewsWithAbout();
+  // Phone: the menu is a column, so the strip narrows to the one row of it that sits on the
+  // header row, then the column grows from it.
+  const menuWidth = phoneRowWidth(header);
   if (menuWidth) panel.style.setProperty('--about-from', `${menuWidth}px`);
   const fullWidth = panel.getBoundingClientRect().width;
   panel.style.setProperty('--about-w-end', fullWidth > menuWidth && menuWidth ? String(menuWidth / fullWidth) : '0');
@@ -548,8 +707,102 @@ function closeAboutToNav(moveFocus) {
   };
   panel.addEventListener('transitionend', endAboutClose);
   // Fallback for a background tab, which never runs the transitions: fold, then narrow.
-  const grow = parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 || 500;
   aboutMotion = window.setTimeout(endAboutClose, grow * 2 + 100);
+}
+
+let stripGhost = null;
+let stripToggle = null;
+
+/** Takes away the strip from a desktop About close, and the +'s temporary stacking. */
+function clearStripGhost() {
+  stripGhost?.remove();
+  stripGhost = null;
+  if (stripToggle) {
+    stripToggle.style.position = '';
+    stripToggle.style.zIndex = '';
+    stripToggle = null;
+  }
+}
+
+/** The shared opening and closing length (--grow-duration), in ms. */
+function growMs(header) {
+  return parseFloat(getComputedStyle(header).getPropertyValue('--grow-duration')) * 1000 || 500;
+}
+
+/** The expo-out of EXPO_OUT, for motion driven frame by frame. */
+const expoOut = (p) => (p >= 1 ? 1 : 1 - 2 ** (-10 * p));
+
+/** Desktop: the folded windows hand back to the menu row (see closeAboutToNav). */
+function handBackStrip(header, panel, moveFocus) {
+  if (!aboutOpen) return;
+  // The strip on screen: from News (when it sits beside About) to the end of About's windows,
+  // on the header row.
+  const logo = header.querySelector('.site-header__logo')?.getBoundingClientRect();
+  const news = header.querySelector('[data-news-panel]:not([hidden])')?.getBoundingClientRect();
+  const windows = panel.getBoundingClientRect();
+  if (!logo || windows.width < 1) {
+    finishAboutClose(moveFocus);
+    return;
+  }
+  const stripLeft = news && news.width > 0 ? Math.min(news.left, windows.left) : windows.left;
+  const stripRight = windows.right;
+
+  hideNewsNow();
+  hideAbout();
+  // The menu opens with its own motion (applyNav), not finished at once.
+  applyNav(true, moveFocus, undefined, { fromAbout: true });
+  reopenArchiveBar();
+
+  // The strip ends exactly on the About button: it follows the button's live box as the
+  // menu grows (the current section's button is narrower than its measured width, so a
+  // precomputed target landed a few pixels off).
+  const aboutLink = header.querySelector('[data-about-open]');
+  const toggle = header.querySelector('.site-header__toggle');
+  if (!aboutLink || !toggle) return;
+
+  clearStripGhost();
+  const ghost = document.createElement('div');
+  ghost.setAttribute('aria-hidden', 'true');
+  Object.assign(ghost.style, {
+    position: 'absolute',
+    zIndex: '1',
+    top: '0px',
+    height: `${logo.height}px`,
+    background: 'var(--foreground-color)',
+    pointerEvents: 'none',
+  });
+  // Behaviour styles, inline because the strip only lives for this motion: it is the menu's
+  // red, and the + stays on top of it as it travels with the growing row.
+  toggle.style.position = 'relative';
+  toggle.style.zIndex = '2';
+  stripToggle = toggle;
+  header.append(ghost);
+  stripGhost = ghost;
+  const grow = growMs(header);
+  const t0 = performance.now();
+  const place = () => {
+    const box = header.getBoundingClientRect();
+    const to = aboutLink.getBoundingClientRect();
+    const e = expoOut(Math.min(1, (performance.now() - t0) / grow));
+    const left = stripLeft + (to.left - stripLeft) * e;
+    const right = stripRight + (to.right - stripRight) * e;
+    ghost.style.top = `${logo.top - box.top}px`;
+    ghost.style.left = `${left - box.left}px`;
+    ghost.style.width = `${Math.max(0, right - left)}px`;
+  };
+  const done = () => {
+    if (stripGhost === ghost) clearStripGhost();
+  };
+  place();
+  const frame = () => {
+    if (stripGhost !== ghost) return;
+    place();
+    if (performance.now() - t0 < grow) requestAnimationFrame(frame);
+    else done();
+  };
+  requestAnimationFrame(frame);
+  // A background tab never runs the frames: take the strip away anyway.
+  window.setTimeout(done, grow + 150);
 }
 
 // A product handing its title back to the Merch page has already slid it into place
@@ -604,6 +857,31 @@ function paintHeaderProject(link, title, href) {
   }
   if (fadeIn) link.offsetWidth;
   link.style.color = '';
+}
+
+/**
+ * The title bubble is sized in pixels from its text. Measured before the font had loaded
+ * (a first visit), that width was too narrow and the name came out cut short. Once fonts
+ * are in, a shown title is measured again and eased to its real width.
+ */
+function refitHeaderProject() {
+  const link = document.querySelector('[data-header-project]');
+  // Not while it is closing (its width is going to 0 before it hides).
+  if (!link || link.hidden || !link.textContent || !link.style.width || link.style.width === '0px') return;
+  const shown = link.getBoundingClientRect().width;
+  const previous = link.style.width;
+  link.style.transition = 'none';
+  link.style.width = 'max-content';
+  const needed = link.getBoundingClientRect().width;
+  link.style.width = previous;
+  link.offsetWidth;
+  link.style.transition = '';
+  if (Math.abs(needed - shown) > 0.5) link.style.width = `${needed}px`;
+}
+
+if (document.fonts) {
+  document.fonts.ready.then(refitHeaderProject);
+  document.fonts.addEventListener?.('loadingdone', refitHeaderProject);
 }
 
 /** Shows a label in the bubble between the logo and the menu. */
@@ -682,8 +960,9 @@ function delay(ms) {
 /** How long the open menu takes to fold away: the staggered links, until the last is gone. */
 function menuCloseMs(header) {
   const style = getComputedStyle(header);
-  // The links fold on --ease-fold, which ends cleanly, so the wait is the whole fold.
-  const fold = parseFloat(style.getPropertyValue('--fold-duration')) * 1000;
+  // The links fold on --ease-fold (the opening expo-out), which has visually landed a
+  // little past half its length, so the next page needn't wait for its tail.
+  const fold = parseFloat(style.getPropertyValue('--fold-duration')) * 1000 * 0.6;
   const stagger = parseFloat(style.getPropertyValue('--fold-stagger'));
   if (!Number.isFinite(fold) || !Number.isFinite(stagger)) return motionMs(header);
   // The archive's drop-down wipes in whole. The rest, the phone column included, stagger.
@@ -708,7 +987,16 @@ function swapClosedSection(header, from, to, generation) {
   if (phone.matches) return Promise.resolve();
   const outgoing = linkByHref(header, from);
   const incoming = linkByHref(header, to);
-  if ((!outgoing && !incoming) || outgoing === incoming) return Promise.resolve();
+  // A section change started before the last one finished skips that one's clean-up, so
+  // its link could keep --bubble: 1 and stay open as an empty block in the row. Fold any
+  // such leftover away with this change.
+  const stale = [...navLinks(header)].filter(
+    (link) => link !== outgoing && link !== incoming && link.style.getPropertyValue('--bubble'),
+  );
+  if ((!outgoing && !incoming) || outgoing === incoming) {
+    stale.forEach((link) => link.style.removeProperty('--bubble'));
+    return Promise.resolve();
+  }
 
   const widths = measureSectionWidths(header);
   navLinks(header).forEach((link) => {
@@ -716,11 +1004,12 @@ function swapClosedSection(header, from, to, generation) {
     if (widths[href]) link.style.setProperty('--full', `${widths[href]}px`);
   });
 
-  const links = [outgoing, incoming].filter(Boolean);
+  const links = [outgoing, incoming, ...stale].filter(Boolean);
   header.classList.add('is-section-swap');
   links.forEach((link) => {
     link.getAnimations?.().forEach((animation) => animation.cancel());
     link.style.transition = 'none';
+    // Stale links start from where they were left, open.
     link.style.setProperty('--bubble', link === incoming ? '0' : '1');
   });
   // Move the marker while the widths are pinned, so max-content cannot snap.
@@ -733,6 +1022,7 @@ function swapClosedSection(header, from, to, generation) {
     link.style.transition = '';
   });
   if (outgoing) outgoing.style.setProperty('--bubble', '0');
+  stale.forEach((link) => link.style.setProperty('--bubble', '0'));
   if (incoming) incoming.style.setProperty('--bubble', '1');
 
   // Expo-out has visually landed a little past half its length.
@@ -983,8 +1273,8 @@ export function setUpHeader() {
     header.removeAttribute('data-closing');
     setLinksInert(header, true);
     toggle?.removeAttribute('inert');
-    toggle?.setAttribute('aria-expanded', 'true');
-    toggle?.setAttribute('aria-label', 'Close about');
+    toggle?.setAttribute('aria-expanded', 'false');
+    toggle?.setAttribute('aria-label', 'Back to menu');
     const panel = aboutPanel(header);
     if (panel) {
       panel.hidden = false;
@@ -1009,6 +1299,13 @@ export function setUpHeader() {
     header.removeAttribute('data-open');
     header.removeAttribute('data-closing');
     header.classList.remove('is-section-swap');
+    // Quick clicks through the menu could leave an old section's link held open; only
+    // this page's section shows in the closed row.
+    navLinks(header).forEach((link) => {
+      if (!link.hasAttribute('aria-current') && link.style.getPropertyValue('--bubble').trim() === '1') {
+        link.style.removeProperty('--bubble');
+      }
+    });
     setLinksInert(header, true);
     toggle?.removeAttribute('inert');
   }
@@ -1060,15 +1357,35 @@ document.addEventListener('click', (event) => {
     return;
   }
 
+  const teamClose = event.target.closest('[data-team-close]');
+  if (teamClose) {
+    const panel = teamClose.closest('[data-about-panel]');
+    // The last window open: the whole panel goes back to the menu.
+    if (panel?.hasAttribute('data-copy-closed')) closeAboutToNav(teamClose.matches(':focus-visible'));
+    else setTeamOpen(panel, false);
+    return;
+  }
+
   const aboutTab = event.target.closest('[data-about-tab]');
   if (aboutTab) {
-    showAboutTab(aboutTab.closest('[data-about-panel]'), aboutTab.dataset.aboutTab);
+    const panel = aboutTab.closest('[data-about-panel]');
+    // Desktop shows the windows side by side: the team link brings a closed Team back.
+    if (!phone.matches && aboutTab.dataset.aboutTab === 'team') setTeamOpen(panel, true);
+    else showAboutTab(panel, aboutTab.dataset.aboutTab);
     return;
   }
 
   const aboutClose = event.target.closest('[data-about-close]');
   if (aboutClose) {
-    closeAboutToNav(aboutClose.matches(':focus-visible'));
+    const panel = aboutClose.closest('[data-about-panel]');
+    // Desktop: each window closes on its own, as Team and News do. Only the last one open
+    // takes the whole panel back to the menu. Phone has one window with tabs, so it all goes.
+    if (!phone.matches && teamWindowOpen(panel)) {
+      setCopyOpen(panel, false);
+      if (aboutClose.matches(':focus-visible')) panel.querySelector('[data-team-close]')?.focus();
+    } else {
+      closeAboutToNav(aboutClose.matches(':focus-visible'));
+    }
     return;
   }
 
@@ -1120,13 +1437,60 @@ function bumpMenuIdle() {
   window.clearTimeout(menuIdleTimer);
   if (!navOpen || aboutOpen || !phone.matches) return;
   menuIdleTimer = window.setTimeout(() => {
-    if (navOpen && !aboutOpen) applyNav(false, false);
+    if (!navOpen || aboutOpen) return;
+    idleClosedAt = performance.now();
+    applyNav(false, false);
   }, MENU_IDLE_MS);
 }
+
+// A tap just after the menu folded by itself does nothing, instead of picking or opening the
+// project card that was under the menu. Window capture runs before the page's own listeners.
+window.addEventListener(
+  'click',
+  (event) => {
+    if (performance.now() - idleClosedAt > IDLE_TAP_GUARD_MS) return;
+    idleClosedAt = -Infinity;
+    if (event.target instanceof Element && event.target.closest('.site-header')) return;
+    event.preventDefault();
+    event.stopPropagation();
+  },
+  true,
+);
 
 function clearMenuIdle() {
   window.clearTimeout(menuIdleTimer);
   menuIdleTimer = 0;
+}
+
+/** Desktop: the width the header row reaches once the menu has opened, measured from the
+    links' full widths (measureBubbles), so it is right while the menu is still growing. */
+function openMenuWidth(header) {
+  if (!header) return 0;
+  const gap = parseFloat(getComputedStyle(header).getPropertyValue('--small-gap')) || 1;
+  let width = 0;
+  [...header.children].forEach((piece) => {
+    if (piece.matches('.site-header__nav')) {
+      const links = [...navLinks(header)];
+      // The current page's button is already open and narrower than its measured full width
+      // (its own padding), so it counts as it is. Otherwise the row, and the footer sized
+      // from it, came out a few pixels too wide (past the + into the Archive list).
+      const full = links.reduce((sum, link) => {
+        if (link.hasAttribute('aria-current')) {
+          const open = link.getBoundingClientRect().width;
+          if (open > 1) return sum + open;
+        }
+        return sum + (parseFloat(link.style.getPropertyValue('--full')) || 0);
+      }, 0);
+      width += gap + full + gap * Math.max(0, links.length - 1);
+      return;
+    }
+    // The News popup sits in the row beside the logo while it is open.
+    if (!piece.matches('.site-header__logo, .news-panel, .site-header__context, .site-header__toggle')) return;
+    const style = getComputedStyle(piece);
+    if (style.display === 'none' || style.position === 'absolute' || style.position === 'fixed') return;
+    width += piece.getBoundingClientRect().width + (parseFloat(style.marginLeft) || 0);
+  });
+  return Math.round(width);
 }
 
 /** Desktop: shows the footer at the bottom of the screen with the menu, on every page. */
@@ -1134,7 +1498,41 @@ function raiseMenuFooter() {
   // Phone: the menu opens on its own and the footer stays where it is. Closing then has
   // nothing to lower.
   if (phone.matches || footerIsRaised()) return;
+  sizeMenuFooter();
   raiseFooter();
+}
+
+/** Desktop, once the menu has opened: the footer ends where the menu does, before its x. */
+function fitFooterToToggle(header) {
+  if (phone.matches || !footerIsRaised()) return;
+  const logo = header.querySelector('.site-header__logo')?.getBoundingClientRect();
+  const toggleEl = header.querySelector('.site-header__toggle');
+  const toggle = toggleEl?.getBoundingClientRect();
+  if (!logo || !toggle) return;
+  // The open menu without its close button: up to the gap before the x.
+  const end = toggle.left - (parseFloat(getComputedStyle(toggleEl).marginLeft) || 0);
+  if (end <= logo.left) return;
+  document.querySelector('.site-footer')?.style.setProperty('--menu-w', `${Math.round(end - logo.left)}px`);
+}
+
+/** Desktop: the footer is as wide as the open menu without its close button (footer.css). */
+function sizeMenuFooter() {
+  const header = document.querySelector('.site-header');
+  const toggle = header?.querySelector('.site-header__toggle');
+  // The row ends with the x; the footer stops before it.
+  const closeWidth = toggle
+    ? toggle.getBoundingClientRect().width + (parseFloat(getComputedStyle(toggle).marginLeft) || 0)
+    : 0;
+  document.querySelector('.site-footer')?.style.setProperty('--menu-w', `${Math.max(0, openMenuWidth(header) - closeWidth)}px`);
+}
+
+// The News popup opens and closes in the same row, also while the menu is open, so the
+// raised footer follows its width. The header persists across pages: observed once.
+const newsPanel = document.querySelector('[data-news-panel]');
+if (newsPanel && 'ResizeObserver' in window) {
+  new ResizeObserver(() => {
+    if (!phone.matches && footerIsRaised()) sizeMenuFooter();
+  }).observe(newsPanel);
 }
 
 /** Puts the footer back below the screen when the menu closes. */
@@ -1189,6 +1587,7 @@ document.addEventListener('transitionend', (event) => {
   if (navOpen) {
     header.classList.add('is-settled');
     bumpMenuIdle();
+    fitFooterToToggle(header);
   } else {
     header.removeAttribute('data-open');
     header.removeAttribute('data-closing');

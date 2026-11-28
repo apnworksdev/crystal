@@ -7,8 +7,8 @@ import Logo from '../components/icons/Logo.astro';
 import NewsPanel from '../components/NewsPanel.astro';
 import headerFlipSource from '../scripts/header-flip.js?raw';
 import { getAbout, getSettings, isPreview } from '../lib/content.js';
+import fontFaces from '../styles/common/fonts.css?raw';
 import '../styles/common/variables.css';
-import '../styles/common/fonts.css';
 import '../styles/common/globals.css';
 import '../styles/common/main.css';
 import '../styles/common/transitions.css';
@@ -59,7 +59,14 @@ const pageKind = player
     <meta name="description" content={stegaClean(description ?? settings.description)} />
     {isPreview && <meta name="robots" content="noindex" />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {/* The @font-face rules in their own block, the same on every page, so the page router
+        keeps it across page changes. Bundled into each page's own styles, they were removed
+        and added back on every change, and the menu's text blinked and shifted as the
+        fonts were taken up again. */}
+    <style is:inline set:html={fontFaces}></style>
     <link rel="preload" href="/fonts/MagisterST-Bold.woff2" as="font" type="font/woff2" crossorigin />
+    {/* Medium is the Work stack's big titles (and the team, which loads it when About opens). */}
+    {onWork && <link rel="preload" href="/fonts/MagisterST-Medium.woff2" as="font" type="font/woff2" crossorigin />}
     {/* Mono is only used by the player, credits, archive, awards and the work list. */}
     {usesMono && <link rel="preload" href="/fonts/MagisterMonoST-Regular.woff2" as="font" type="font/woff2" crossorigin />}
     {!settings.isPlaceholder && <link rel="preconnect" href="https://cdn.sanity.io" />}
@@ -114,7 +121,7 @@ const pageKind = player
         var timer = window.setTimeout(function () {
           root.classList.remove('intro-play', 'intro-landed', 'intro-header', 'intro-page');
           release();
-        }, 6000);
+        }, 10000);
 
         function release() {
           window.clearTimeout(timer);
@@ -129,10 +136,11 @@ const pageKind = player
     </script>
   </head>
   <body data-page={pageKind}>
+    {/* The red plate covers the page from first paint; intro.js draws the moving wordmark
+        and the shrinking box into the canvas on top of it. */}
     <div class="intro" data-intro aria-hidden="true">
-      <div class="intro__plate" data-intro-plate>
-        <Logo />
-      </div>
+      <div class="intro__plate" data-intro-plate></div>
+      <canvas class="intro__canvas" data-intro-canvas></canvas>
     </div>
     {/* A phone held sideways sees this instead of the page (rotate-notice.css). The site is
         laid out for a phone held upright; the project player still works sideways. */}
@@ -143,6 +151,8 @@ const pageKind = player
     <header class="site-header" transition:persist="site-header" transition:animate="none">
       <a class="site-header__logo" href="/">
         <Logo />
+        {/* The moving wordmark (logo-motion.js). The SVG above stays for pages without scripts. */}
+        <canvas class="site-header__wordmark" data-wordmark aria-hidden="true"></canvas>
         <span class="sr-only">{settings.title}</span>
       </a>
       {settings.news && <NewsPanel items={settings.news} />}
@@ -167,28 +177,21 @@ const pageKind = player
               hidden
               aria-label="Close details"
             >
-              <svg viewBox="0 0 11 11" aria-hidden="true">
-                <path
-                  d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z"
-                  fill="currentColor"
-                ></path>
-              </svg>
+              <svg viewBox="0 0 21 24" aria-hidden="true"><path d="M5 6.5L16 17.5M16 6.5L5 17.5" stroke="currentColor" stroke-width="1" fill="none"></path></svg>
             </button>
           </div>
           <div class="site-header__info" id="project-info" data-player-info hidden></div>
         </div>
-        <!-- Reserved. The action comes later. -->
-        <button class="site-header__slot" type="button" tabindex="-1" aria-hidden="true"><span class="site-header__slot-icon">»«</span></button>
+        {/* The fluted glass over the video (project.js, fluted-glass.js), as on the mirror page. Off until clicked. */}
+        <button class="site-header__slot" type="button" data-player-fx aria-pressed="false" aria-label="Fluted glass effect"><span class="site-header__slot-icon" aria-hidden="true">»«</span></button>
         <label class="site-header__seek">
           <span class="sr-only">Seek</span>
           <canvas class="site-header__wave" data-player-wave aria-hidden="true"></canvas>
           <input type="range" data-player-seek min="0" max="1000" value="0" step="1" />
         </label>
-        <span class="site-header__time" data-player-time>00:00/00:00</span>
+        <span class="site-header__time" data-player-time>00:00:00:00</span>
         <button class="site-header__close" type="button" data-player-close aria-label="Close">
-          <svg viewBox="0 0 11 11" aria-hidden="true">
-            <path d="M5.83313 5.48062L10.9603 10.6078L10.6068 10.9614L5.47958 5.83418L0.353742 10.96L0.000189037 10.6065L5.12602 5.48062L0.000189037 0.354791L0.353742 0.00123805L5.47958 5.12707L10.6068 -0.000143021L10.9603 0.35341L5.83313 5.48062Z" fill="currentColor"></path>
-          </svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.7 6.7L17.3 17.3M17.3 6.7L6.7 17.3" stroke="currentColor" stroke-width="1" fill="none"></path></svg>
         </button>
       </div>
       <div class="site-header__context">
@@ -253,9 +256,7 @@ const pageKind = player
         aria-label="Open menu"
       >
         <span aria-hidden="true" data-header-mark>
-          <svg data-header-plus viewBox="0 0 15 15" aria-hidden="true">
-            <path d="M7.75098 7.25H15.001L15 7.75H7.75098V15H7.25098V7.75H0L0.000976562 7.25H7.25098V0H7.75098V7.25Z" fill="#D9D9D9"></path>
-          </svg>
+          <svg data-header-plus viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5V19.5M4.5 12H19.5" stroke="currentColor" stroke-width="1" fill="none"></path></svg>
         </span>
       </button>
       <div class="site-header__columns" data-archive-columns>
@@ -284,6 +285,31 @@ const pageKind = player
             }
           }
           if (document.readyState === 'complete') return;
+          /* Back from the mirror: white, with its logo in the middle, before first paint.
+             mirror-trigger.js then shrinks the logo into the header (the way in, reversed). */
+          var mirrorLogo = sessionStorage.getItem('crystal-mirror-leave');
+          if (mirrorLogo && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            var veil = document.createElement('div');
+            veil.className = 'mirror-enter';
+            veil.setAttribute('data-mirror-return', 'cover');
+            veil.setAttribute('aria-hidden', 'true');
+            veil.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:var(--background-color)';
+            var word = document.createElement('div');
+            word.className = 'mirror-enter';
+            word.setAttribute('data-mirror-return', 'logo');
+            word.setAttribute('aria-hidden', 'true');
+            word.innerHTML = mirrorLogo;
+            var wordWidth = Math.min(innerWidth * 0.7, 1600);
+            word.style.cssText =
+              'position:fixed;z-index:2147483647;color:var(--foreground-color);' +
+              'left:' + (innerWidth - wordWidth) / 2 + 'px;top:' + (innerHeight - wordWidth * 0.2) / 2 + 'px;' +
+              'width:' + wordWidth + 'px;height:' + wordWidth * 0.2 + 'px';
+            document.body.appendChild(veil);
+            document.body.appendChild(word);
+            /* The word inside the header logo waits hidden until this one has landed. */
+            var headerWord = document.querySelectorAll('.site-header__logo > :not(.sr-only)');
+            for (var w = 0; w < headerWord.length; w++) headerWord[w].style.visibility = 'hidden';
+          }
           if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
             sessionStorage.removeItem('crystal-header-from');
             return;

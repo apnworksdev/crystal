@@ -89,6 +89,8 @@ const poster = kind === 'image' ? media : media?.poster;
           />
         )
       }
+      {/* The »« button's fluted glass draws the video in here (fluted-glass.js). */}
+      {kind === 'video' && media.source === 'file' && <canvas class="project__fx" data-project-fx aria-hidden="true"></canvas>}
       <div class="project__hit" data-project-hit></div>
     </div>
 
@@ -111,24 +113,13 @@ const poster = kind === 'image' ? media : media?.poster;
     }
 
     <div class="project__cursor" data-project-cursor hidden aria-hidden="true">
-      {/* Outline only. project.js shows play while paused and pause while playing. Stroke 0.6 of
-          the 12-unit box is 1px at the 20px drawn size; project.css scales it to half, so 0.5px. */}
-      <svg data-icon="play" viewBox="0 0 12 12" aria-hidden="true">
-        <path
-          d="M2.5 1.3v9.4L10.3 6z"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="0.6"
-          stroke-linejoin="miter"
-        ></path>
+      {/* As in the studio's preview: 24 × 24, 1px outlines. project.js shows play while
+          paused and pause while playing. */}
+      <svg data-icon="play" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17.5 12L7.5 18.5V5.5Z" fill="none" stroke="currentColor" stroke-width="1"></path>
       </svg>
-      <svg data-icon="pause" viewBox="0 0 12 12" hidden aria-hidden="true">
-        <path
-          d="M2.5 1.5h2v9h-2zm5 0h2v9h-2z"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="0.6"
-        ></path>
+      <svg data-icon="pause" viewBox="0 0 24 24" hidden aria-hidden="true">
+        <path d="M9.5 6V18M14.5 6V18" fill="none" stroke="currentColor" stroke-width="1"></path>
       </svg>
     </div>
   </article>

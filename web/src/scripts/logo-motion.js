@@ -1,36 +1,22 @@
-// Moves the wordmark in two places only, always from sound.
+// Moves the wordmark (wordmark.js) from sound, in two places:
 //
-// Mirror page: the microphone. With no mic, or silence, the logo stays still.
-// Project page: the video's own sound. A file video is measured directly. When the sound
-// can't be heard (a Vimeo player lives in another site's frame, or a file's host won't
-// share it), the letters move at random instead. Pausing, or reaching the end, holds the
-// logo exactly as it is; playing again carries on from there. Leaving the project puts it
-// back, since the header logo persists across pages.
+// Project page: the header logo moves while the video plays. When its sound can be read (a
+// file its host shares), C and R follow the bass, Y, S and T the mids, A and L the treble.
+// When it can't (a Vimeo player lives in another site's frame, or a file's host won't share
+// it), a stand-in sound moves them (lib/sound-level.js). The »« glass bends with the same
+// sound (projectSound). Pausing, or reaching the end, stops the logo where it is; playing
+// again carries on from there. Leaving the project puts it back.
+// Mirror page: the microphone (mirror.js hands over its analyser).
 
-import {
-  bandLevels,
-  createBandState,
-  createRandomState,
-  logoPath,
-  parseLogoPath,
-  randomLevels,
-  widthsFor,
-} from '../lib/logo-motion.js';
+import { createRandomSpectrum } from '../lib/sound-level.js';
+import { createWordmark } from './wordmark.js';
 
-const HEADER = '.site-header__logo svg';
-const MIRROR = '.mirror__logo svg';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
-let letters = null;
-let frame = 0;
 let ctx = null;
-let mic = null;
+let header = null;
+let mirror = null;
 let media = null;
-let bands = null;
-let shown = null;
-let sourceKind = '';
-let random = null;
-let lastTime = 0;
 const nodes = new WeakMap();
 const tapping = new WeakSet();
 
@@ -39,90 +25,52 @@ function audio() {
   return ctx;
 }
 
+/** The header logo's wordmark. The header persists across pages, so it is made once. */
+export function headerWordmark() {
+  const canvas = document.querySelector('.site-header__logo [data-wordmark]');
+  if (!canvas) return null;
+  if (header?.canvas !== canvas) {
+    header?.destroy();
+    header = createWordmark(canvas);
+    canvas.closest('.site-header__logo')?.setAttribute('data-wordmark-ready', '');
+  }
+  return header;
+}
+
+function mirrorWordmark() {
+  const canvas = document.querySelector('.mirror__logo [data-wordmark]');
+  if (!canvas) return null;
+  if (mirror?.canvas !== canvas) {
+    mirror?.destroy();
+    mirror = createWordmark(canvas, { inner: 1 });
+    canvas.closest('.mirror__logo')?.setAttribute('data-wordmark-ready', '');
+  }
+  return mirror;
+}
+
 /** Opens the audio context during the click that starts a project, so a file video can be heard and measured. */
 export function primeLogoAudio() {
   try {
     audio().resume().catch(() => {});
   } catch {
-    // No Web Audio. The logo stays still.
+    // No Web Audio. The logo plays the wave instead.
   }
 }
 
-/** The mirror page already analyses the microphone. Pass that analyser, or null when it stops. */
+/** The mirror page analyses the microphone. Pass that analyser, or null when it stops. */
 export function setLogoMic(analyser) {
-  mic = analyser || null;
-  // Without the mic the logo eases back to rest; with it, it starts listening.
-  startLogoMotion();
-}
-
-function onMirror() {
-  return Boolean(document.querySelector('[data-mirror]'));
-}
-
-function marks() {
-  return document.querySelectorAll(onMirror() ? MIRROR : HEADER);
-}
-
-function logoPaths() {
-  return [...marks()].map((svg) => svg.querySelector('path')).filter(Boolean);
+  const mark = mirrorWordmark();
+  if (!mark) return;
+  if (analyser && !reduced.matches) mark.setMode('mic', analyser);
+  else mark.setMode('rest');
 }
 
 /** A project video that is actually playing. Vimeo reports that with data-playing. */
 function playingProjectVideo() {
   const file = document.querySelector('[data-project-file]');
-  if (file instanceof HTMLMediaElement) return !file.paused && !file.ended;
+  if (file instanceof HTMLMediaElement) return !file.paused && !file.ended ? file : null;
   const vimeo = document.querySelector('[data-project-vimeo]');
-  return vimeo instanceof HTMLIFrameElement && vimeo.hasAttribute('data-playing');
-}
-
-/** A project page with a video: a paused or finished video holds the logo where it is. */
-function holdsPose() {
-  return !onMirror() && Boolean(document.querySelector('[data-project-file], [data-project-vimeo]'));
-}
-
-function settled() {
-  return !shown || shown.every((level) => Math.abs(level) < 0.002);
-}
-
-/** The mirror while it hears the mic (or is easing back to rest), or a playing project video. */
-function wantsMotion() {
-  if (reduced.matches || document.hidden) return false;
-  if (onMirror()) return Boolean(mic) || !settled();
-  return playingProjectVideo();
-}
-
-function ensureLetters() {
-  const paths = logoPaths();
-  if (!paths.length) return letters;
-  // Keep the drawn path, so the wordmark can be put back when the motion stops.
-  const saved = paths.find((path) => path.dataset.rest)?.dataset.rest;
-  if (!letters) letters = parseLogoPath(saved || paths[0].getAttribute('d') || '');
-  if (!letters) return null;
-  const rest = saved || paths[0].getAttribute('d') || '';
-  for (const path of paths) {
-    if (!path.dataset.rest) path.dataset.rest = rest;
-  }
-  return letters;
-}
-
-function restore() {
-  for (const svg of document.querySelectorAll(`${HEADER}, ${MIRROR}`)) {
-    const path = svg.querySelector('path');
-    if (path?.dataset.rest) path.setAttribute('d', path.dataset.rest);
-    svg.style.removeProperty('--logo-c');
-  }
-}
-
-function cancel() {
-  if (frame) cancelAnimationFrame(frame);
-  frame = 0;
-}
-
-function projectVideo() {
-  const video = document.querySelector('[data-project-file]');
-  if (!(video instanceof HTMLMediaElement)) return null;
-  if (video.paused || video.ended || video.dataset.logoCors === 'failed') return null;
-  return video;
+  return vimeo instanceof HTMLIFrameElement && vimeo.hasAttribute('data-playing') ? vimeo : null;
 }
 
 function canTap(video) {
@@ -151,8 +99,6 @@ async function tap(video) {
     const analyser = context.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.5;
-    analyser.minDecibels = -90;
-    analyser.maxDecibels = -24;
     source.connect(analyser);
     analyser.connect(context.destination);
     nodes.set(video, { source, analyser });
@@ -162,6 +108,7 @@ async function tap(video) {
   } finally {
     tapping.delete(video);
   }
+  startLogoMotion();
 }
 
 function releaseMedia() {
@@ -174,102 +121,60 @@ function releaseMedia() {
   media = null;
 }
 
-const samples = new WeakMap();
-
-/** One moment of sound: the spectrum, and how loud the waveform is (rmsDb). */
-function sample(analyser, time) {
-  let buffers = samples.get(analyser);
-  if (!buffers || buffers.bins.length !== analyser.frequencyBinCount) {
-    buffers = { bins: new Uint8Array(analyser.frequencyBinCount), wave: new Float32Array(analyser.fftSize) };
-    samples.set(analyser, buffers);
-  }
-  const { bins, wave } = buffers;
-  analyser.getByteFrequencyData(bins);
-  analyser.getFloatTimeDomainData(wave);
-  let sum = 0;
-  for (let index = 0; index < wave.length; index += 1) sum += wave[index] * wave[index];
-  const rms = Math.sqrt(sum / wave.length);
-  return {
-    bins,
-    sampleRate: analyser.context.sampleRate,
-    minDb: analyser.minDecibels,
-    maxDb: analyser.maxDecibels,
-    rmsDb: rms > 0 ? 20 * Math.log10(rms) : -Infinity,
-    time,
-  };
+function onProject() {
+  return Boolean(document.querySelector('[data-project-file], [data-project-vimeo]'));
 }
 
-function levels(time) {
-  const count = letters.length;
-  releaseMedia();
-  const dt = lastTime ? time - lastTime : 0;
-  lastTime = time;
-  let kind;
-  let video = null;
-  if (onMirror()) kind = mic ? 'mic' : 'still';
-  else {
-    video = projectVideo();
-    kind = video && nodes.has(video) ? 'video' : 'random';
-  }
-  if (kind !== sourceKind) {
-    sourceKind = kind;
-    bands = createBandState(count);
-  }
-  if (!shown || shown.length !== count) shown = Array(count).fill(0);
-  if (!random || random.level.length !== count) random = createRandomState(count);
+let standIn = null;
 
-  let target;
-  if (kind === 'mic') target = bandLevels(bands, sample(mic, time));
-  else if (kind === 'video') target = bandLevels(bands, sample(nodes.get(video).analyser, time));
-  else if (kind === 'random') target = randomLevels(random, dt);
-  else target = Array(count).fill(0);
-
-  for (let index = 0; index < count; index += 1) shown[index] += (target[index] - shown[index]) * 0.45;
-  return shown;
+/** An analyser-shaped stand-in for a sound that can't be heard. */
+function standInAnalyser() {
+  if (!standIn) {
+    const source = createRandomSpectrum();
+    standIn = {
+      frequencyBinCount: 1024,
+      minDecibels: -100,
+      maxDecibels: -30,
+      context: { sampleRate: source.sampleRate },
+      getByteFrequencyData(bins) {
+        source.fill(bins, performance.now() / 1000);
+      },
+    };
+  }
+  return standIn;
 }
 
-function paint(now) {
-  if (!letters) return;
-  const widths = widthsFor(letters, levels(now / 1000));
-  const d = logoPath(letters, widths);
-  const c = `${widths[0].toFixed(2)}px`;
-  for (const svg of marks()) {
-    const path = svg.querySelector('path');
-    if (path && path.getAttribute('d') !== d) path.setAttribute('d', d);
-    // The phone header shows only the c, and clips to its rest width. Follow the
-    // letter so the next one never peeks in. Desktop and the mirror ignore this.
-    if (svg.closest('.site-header__logo')) svg.style.setProperty('--logo-c', c);
-  }
+/** The sound the logo follows: the video's own when it can be read, otherwise the stand-in. */
+function projectAnalyser(playing) {
+  const node = playing instanceof HTMLVideoElement ? nodes.get(playing) : null;
+  return node ? node.analyser : standInAnalyser();
 }
 
-/** Stops the motion. A paused project video holds the pose; anywhere else it goes back. */
-function halt() {
-  cancel();
-  lastTime = 0;
-  if (!holdsPose()) {
-    restore();
-    if (!onMirror()) shown = null;
-  }
+/**
+ * The sound the »« glass bends with: the same one the logo follows while the video plays,
+ * or null when it is paused or hasn't started, so the glass settles with the logo.
+ */
+export function projectSound() {
+  const playing = playingProjectVideo();
+  return playing ? projectAnalyser(playing) : null;
 }
 
-function tick(now) {
-  if (!wantsMotion()) {
-    frame = 0;
-    halt();
-    return;
-  }
-  frame = requestAnimationFrame(tick);
-  paint(now);
-}
-
+/** Matches the header logo to what the project's video is doing. */
 export function startLogoMotion() {
-  if (!wantsMotion()) {
-    halt();
+  const mark = headerWordmark();
+  if (!mark) return;
+  releaseMedia();
+  if (reduced.matches || !onProject()) {
+    if (mark.mode !== 'rest') mark.setMode('rest');
     return;
   }
-  if (!ensureLetters()) return;
-  if (frame) return;
-  frame = requestAnimationFrame(tick);
+  const playing = playingProjectVideo();
+  if (!playing) {
+    // Paused or finished: the logo stops where it is.
+    if (mark.mode === 'audio') mark.hold();
+    return;
+  }
+  mark.setMode('audio', projectAnalyser(playing));
 }
 
 function onPlay(event) {
@@ -279,21 +184,20 @@ function onPlay(event) {
   startLogoMotion();
 }
 
-// Paused or finished: the logo holds where it is (see halt).
 function onVideoStop(event) {
   const video = event.target;
   if (!(video instanceof HTMLVideoElement) || !video.hasAttribute('data-project-file')) return;
-  if (!onMirror()) halt();
+  startLogoMotion();
 }
 
 function onPointerDown() {
   ctx?.resume().catch(() => {});
-  const video = projectVideo();
-  if (video) tap(video);
+  const video = playingProjectVideo();
+  if (video instanceof HTMLVideoElement) tap(video);
 }
 
-// A file the CDN won't share can't be measured. Play it the ordinary way instead
-// of leaving it blank. The logo then drifts, since the sound can't be read.
+// A file the CDN won't share can't be measured. Play it the ordinary way instead of
+// leaving it blank. The logo then plays the wave, since the sound can't be read.
 function onMediaError(event) {
   const video = event.target;
   if (!(video instanceof HTMLVideoElement) || !video.hasAttribute('data-project-file')) return;
@@ -314,17 +218,15 @@ document.addEventListener('pause', onVideoStop, true);
 document.addEventListener('ended', onVideoStop, true);
 document.addEventListener('pointerdown', onPointerDown, true);
 document.addEventListener('error', onMediaError, true);
-document.addEventListener('visibilitychange', startLogoMotion);
 // A new page starts from rest: a new project gets its own motion, and leaving one puts the logo back.
 document.addEventListener('astro:after-swap', () => {
-  cancel();
-  restore();
-  shown = null;
-  random = null;
-  sourceKind = '';
-  lastTime = 0;
+  // A page can change the colours (the Archive's test): the letters take the new one.
+  headerWordmark()?.recolour();
+  headerWordmark()?.reset();
   startLogoMotion();
 });
 reduced.addEventListener('change', startLogoMotion);
 
+// The mirror page has no header: its own wordmark waits, still, for the mic.
+if (document.querySelector('[data-mirror]')) mirrorWordmark()?.redraw();
 startLogoMotion();

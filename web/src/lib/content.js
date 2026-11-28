@@ -57,7 +57,7 @@ const client = createSanityClient();
 const builder = client ? createImageUrlBuilder(client) : null;
 
 const IMAGE = `{ alt, crop, hotspot, asset->{ _id, metadata { lqip, dimensions } } }`;
-const MEDIA = `{ kind, image ${IMAGE}, poster ${IMAGE}, videoUrl }`;
+const MEDIA = `{ kind, image ${IMAGE}, poster ${IMAGE}, videoUrl, "videoFileUrl": videoFile.asset->url }`;
 
 const QUERIES = {
   settings: `*[_type == "siteSettings"][0] {
@@ -118,7 +118,8 @@ function toImage(source, aspect) {
 /** Turns a Sanity media field into an image or a video. */
 async function toMedia(source, aspect) {
   if (source?.kind === 'image') return toImage(source.image, aspect);
-  return toVideo(source?.videoUrl, toImage(source?.poster, aspect));
+  // An uploaded file comes first; otherwise the link (Vimeo, or a direct MP4).
+  return toVideo(source?.videoFileUrl || source?.videoUrl, toImage(source?.poster, aspect));
 }
 
 const toProject = async (project) => ({

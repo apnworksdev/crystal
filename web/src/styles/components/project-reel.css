@@ -18,12 +18,15 @@ body:has([data-reel]:not([hidden])) {
 .project-reel__stage {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
   align-items: center;
   justify-items: center;
   height: 100dvh;
   padding: var(--margin);
   box-sizing: border-box;
+  /* Behaviour: the title's row is always one line tall. A title too long for the screen
+     takes a second line upwards, over the stack, so the cards never move. */
+  --reel-title-size: var(--font-size-huge);
+  grid-template-rows: auto minmax(0, 1fr) calc(var(--reel-title-size) * 0.9);
 }
 
 .project-reel__brand,
@@ -31,10 +34,11 @@ body:has([data-reel]:not([hidden])) {
   max-width: 100%;
   min-height: 0.9em;
   font-size: var(--font-size-huge);
+  font-weight: var(--font-weight-medium);
   line-height: var(--line-height-huge);
   letter-spacing: var(--letter-spacing-huge);
   text-align: center;
-  /* One line at one size for every project: a long title is cut, never shrunk or wrapped. */
+  /* One size for every project, never shrunk. The brand stays on one line and is cut. */
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -45,10 +49,29 @@ body:has([data-reel]:not([hidden])) {
   transition: opacity 0.35s ease;
 }
 
-/* Behaviour: the words stay above the cards, which rise towards them on phone. */
-.project-reel__brand,
+/* Behaviour: a title wider than the screen wraps onto a second line, evenly balanced, and
+   no further (reel.js cuts it short with an ellipsis). It sits at the bottom of its
+   one-line row and grows upwards, over the stack, so the cards never move. */
 .project-reel__title {
+  position: absolute;
+  grid-row: 3 / 4;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-inline: auto;
+  white-space: normal;
+  text-overflow: clip;
+  text-wrap: balance;
+}
+
+/* Behaviour: the words stay above the cards, which rise towards them on phone. */
+.project-reel__brand {
   position: relative;
+  z-index: 1;
+}
+
+/* Over the cards, like the brand. Positioned absolutely above. */
+.project-reel__title {
   z-index: 1;
 }
 
@@ -87,11 +110,6 @@ body:has([data-reel]:not([hidden])) {
 
 body[data-work-view='list'] .project-reel {
   display: none;
-}
-
-.project-reel__card:focus-visible {
-  outline: 2px solid var(--foreground-color);
-  outline-offset: 2px;
 }
 
 .project-reel__card {
@@ -140,6 +158,10 @@ body[data-work-view='list'] .project-reel {
 }
 
 @media (max-width: 40rem) {
+  .project-reel__stage {
+    --reel-title-size: min(var(--font-size-huge), 12vw);
+  }
+
   .project-reel__brand,
   .project-reel__title {
     font-size: min(var(--font-size-huge), 12vw);
