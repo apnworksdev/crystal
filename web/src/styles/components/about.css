@@ -627,26 +627,24 @@ main,
     font-size: var(--font-size-mono);
   }
 
-  /* Added by Claude, restyle freely: the team works as on desktop, where the photo size
-     comes from the window's height so whole members fill it. Here a whole number of rows
-     fills the panel (more rows on a taller screen), every card has that one size, as many
-     sit across as fit, and the list snaps a row at a time, so no member is ever cut. The
-     panel is a size container: the rows are sized from its height. */
+  /* Added by Claude, restyle freely: the team works as on desktop. One column, two whole
+     members to the panel, snapping one member at a time, so none is ever cut. The photo is
+     as wide as the panel, or narrower when the panel is too short for two at that width.
+     The panel is a size container: the sizes come from its width and height. */
   .about-panel__team {
     container-type: size;
     overflow: hidden;
   }
 
   .team__list {
-    --team-rows: 3;
     /* Name line (mono, 115%) and the gap under it. */
     --team-name: calc(var(--font-size-mono) * 1.15 + var(--gap));
-    --team-row: calc((100cqh + var(--gap)) / var(--team-rows));
-    --team-card-w: calc((var(--team-row) - var(--gap) - var(--team-name)) * 3 / 4);
-    grid-template-columns: repeat(auto-fill, var(--team-card-w));
-    grid-auto-rows: calc(var(--team-row) - var(--gap));
+    --team-card-w: min(100cqw, ((100cqh + var(--gap)) / 2 - var(--gap) - var(--team-name)) * 3 / 4);
+    --team-row: calc(var(--team-name) + var(--team-card-w) * 4 / 3);
+    grid-template-columns: var(--team-card-w);
+    grid-auto-rows: var(--team-row);
     justify-content: center;
-    height: 100%;
+    height: calc(var(--team-row) * 2 + var(--gap));
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
@@ -655,19 +653,6 @@ main,
 
   .team-member {
     scroll-snap-align: start;
-  }
-}
-
-/* The phone team's rows (about.css above): one more row for every ~190px of height. */
-@container (min-height: 650px) {
-  .team__list {
-    --team-rows: 4;
-  }
-}
-
-@container (min-height: 840px) {
-  .team__list {
-    --team-rows: 5;
   }
 }
 

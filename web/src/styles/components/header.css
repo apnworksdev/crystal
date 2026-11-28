@@ -494,9 +494,11 @@ body[data-page='product'] .site-header[data-product-morph]:not([data-about]) .si
 .site-header__seek {
   position: relative;
   display: flex;
-  flex: 1;
+  /* Claims 4rem before the title takes the rest, and gives way with it when the screen is
+     narrow; 1rem at the very least, so the bar stays inside the margin. */
+  flex: 1 1 4rem;
   align-items: center;
-  min-width: 2rem;
+  min-width: 1rem;
   height: var(--height-bubble);
   padding-inline: var(--inline-gap);
 }
@@ -610,7 +612,10 @@ body[data-page='project'] .site-header__name {
   position: relative;
   z-index: 1;
   display: flex;
-  flex: none;
+  /* Behaviour (Claude): the title gives way first, cut with an ellipsis, so the bar never runs
+     past the edge of the screen and the x is always on it. */
+  flex: 0 3 auto;
+  min-width: 2rem;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-end;
@@ -1169,15 +1174,17 @@ body[data-page='archive'] .site-header.is-archive-open:not([data-archive-tweenin
     max-width: calc(100vw - var(--margin) * 2);
   }
 
-  /* Behaviour: on Merch the product's name stays on the header row, after the +. */
-  body:has([data-merch-reel]) .site-header:not([data-about]) .site-header__context {
+  /* Behaviour: on Merch the product's name stays on the header row, after the +. On Home the
+     picked project's name does the same: the header sits at the bottom of the screen there,
+     so a row under it was off the screen. */
+  body:is(:has([data-merch-reel]), :has([data-roulette])) .site-header:not([data-about]) .site-header__context {
     position: relative;
     top: auto;
     order: 3;
     margin-left: var(--small-gap);
   }
 
-  body:has([data-merch-reel]) .site-header__project {
+  body:is(:has([data-merch-reel]), :has([data-roulette])) .site-header__project {
     max-width: calc(100vw - var(--margin) * 2 - var(--height-bubble) * 2 - var(--small-gap) * 2);
   }
 

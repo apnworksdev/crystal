@@ -35,6 +35,13 @@ const FLING_FRAME = 16;
 const SETTLE_SPEED = 0.35;
 // A touch that moves less than this stays a tap.
 const TAP_DISTANCE = 8;
+// Touch (the phone): how far a flick carries on, in ms of its speed at release. The column
+// glides straight to the project it reaches, in one motion, instead of slowing by itself and
+// then centring. A quick flick runs through several projects, a gentle one moves one.
+const TOUCH_GLIDE_MS = 280;
+// Touch: the column moves this much further than the reference's mapping, so the picture
+// under the finger keeps up with it (measured: the centre picture moved about 0.55px a pixel).
+const TOUCH_GAIN = 1.6;
 
 let embla;
 let root;
@@ -74,15 +81,24 @@ function projectLength() {
 }
 
 // Moves the row by pixels of the reference row. Positive goes to the next project.
-function nudge(pixels) {
+// `follow: false` moves it at once, under the finger, instead of easing after it.
+function nudge(pixels, { follow = true } = {}) {
   if (!embla || !pixels) return;
   const engine = embla.internalEngine();
   const snaps = engine.scrollSnaps;
   const step = snaps.length > 1 ? Math.abs(snaps[1] - snaps[0]) : engine.containerRect.width;
   engine.scrollBody
-    .useDuration(reducedMotion.matches ? 0 : FOLLOW_DURATION)
+    .useDuration(reducedMotion.matches || !follow ? 0 : FOLLOW_DURATION)
     .useFriction(FOLLOW_FRICTION);
   engine.scrollTo.distance((-pixels * step) / projectLength(), false);
+}
+
+/** How far past the nearest project the row is, in projects: positive towards the next. */
+function offsetFromNearest(nearest) {
+  const snaps = embla.scrollSnapList();
+  if (snaps.length < 2) return 0;
+  const step = Math.abs(snapDelta(snaps[1], snaps[0])) || 1 / snaps.length;
+  return -snapDelta(snaps[nearest], embla.scrollProgress()) / step;
 }
 
 // A wheel or trackpad gesture: where it started and how far it has moved. It ends once no
@@ -139,6 +155,7 @@ function onPointerDown(event) {
   swallowClick = false;
   drag = {
     id: event.pointerId,
+    touch: event.pointerType !== 'mouse',
     x: event.clientX,
     y: event.clientY,
     lastX: event.clientX,
@@ -166,12 +183,13 @@ function onPointerMove(event) {
   drag.lastX = event.clientX;
   drag.lastY = event.clientY;
   drag.lastTime = event.timeStamp;
-  nudge(-delta);
+  // A finger moves the column with it, exactly; a mouse drag keeps the eased follow.
+  nudge(drag.touch ? -delta * TOUCH_GAIN : -delta, { follow: !drag.touch });
 }
 
 function onPointerUp(event) {
   if (!drag || event.pointerId !== drag.id) return;
-  const { moved, lastTime } = drag;
+  const { moved, lastTime, touch } = drag;
   // A finger held still before letting go has no speed left.
   let speed = event.timeStamp - lastTime > 100 ? 0 : drag.speed;
   endDrag();
@@ -181,6 +199,19 @@ function onPointerUp(event) {
   setTimeout(() => (swallowClick = false), 50);
   if (event.type === 'pointercancel' || reducedMotion.matches) {
     settle();
+    return;
+  }
+
+  // A finger: glide straight to the project the flick reaches.
+  if (touch) {
+    const nearest = nearestIndex();
+    const travel = (-speed * TOUCH_GLIDE_MS * TOUCH_GAIN) / projectLength();
+    const count = embla.scrollSnapList().length;
+    // The loop takes the short way round, so a jump stays under half the projects.
+    const most = Math.max(1, Math.floor((count - 1) / 2));
+    const steps = Math.max(-most, Math.min(most, Math.round(offsetFromNearest(nearest) + travel)));
+    armScroll(Math.max(1, Math.abs(steps)));
+    embla.scrollTo((((nearest + steps) % count) + count) % count);
     return;
   }
 
