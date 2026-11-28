@@ -83,10 +83,6 @@ body[data-page='archive'] .site-footer {
 
 .archive__item {
   position: relative;
-  /* Behaviour: rows off screen skip layout, so resizing the columns with the menu costs the
-     same however long the list is. The height holds their place while skipped. */
-  content-visibility: auto;
-  contain-intrinsic-block-size: auto var(--height-bubble);
   display: grid;
   grid-template-columns: var(--archive-columns);
   column-gap: var(--margin);
@@ -133,6 +129,15 @@ body[data-page='archive'] .empty-message {
   .archive:not([data-archive-ready]) {
     visibility: hidden;
   }
+}
+
+/* Behaviour: while the menu or About is open (the columns resize with it), rows off screen
+   skip layout, so the resize costs the same however long the list is. The height holds their
+   place while skipped. Only then: skipped all the time, rows on a fast scroll reached the
+   screen before they were drawn and showed as empty space ahead (changed by Claude). */
+body:has(.site-header:is([data-open], [data-about])) .archive__item {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--height-bubble);
 }
 
 /* Rows that have passed the bar sit just above it.
